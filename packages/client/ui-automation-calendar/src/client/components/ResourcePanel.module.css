@@ -1,0 +1,63 @@
+.panel {
+  width: 240px;
+  padding: 12px;
+  border: 1px solid var(--dsw-border-color);
+  border-radius: 8px;
+  background: var(--dsw-bg-primary);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--dsw-text-primary);
+}
+
+.heatmap {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(10px, 1fr));
+  gap: 2px;
+}
+
+.heatCell {
+  aspect-ratio: 1;
+  border-radius: 2px;
+  min-height: 10px;
+}
+
+.chart {
+  height: 48px;
+  display: flex;
+  align-items: flex-end;
+  gap: 1px;
+}
+
+.bar {
+  flex: 1;
+  min-height: 1px;
+  background: var(--dsw-border-color);
+  border-radius: 1px 1px 0 0;
+}
+
+.stats {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.statRow {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+}
+
+.statName {
+  color: var(--dsw-text-secondary);
+}
+
+.statValue {
+  color: var(--dsw-text-primary);
+  font-weight: 500;
+}

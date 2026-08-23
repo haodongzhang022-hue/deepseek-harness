@@ -1,0 +1,51 @@
+.axis {
+  position: relative;
+  height: 32px;
+  margin: 0 16px;
+  border-bottom: 1px solid var(--dsw-border-color);
+}
+
+.track {
+  position: relative;
+  height: 100%;
+}
+
+.tick {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  transform: translateX(-50%);
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.tick:hover .line {
+  background: var(--dsw-text-primary);
+}
+
+.line {
+  width: 1px;
+  flex: 1;
+  background: var(--dsw-border-color);
+}
+
+.major .line {
+  width: 2px;
+}
+
+.label {
+  font-size: 10px;
+  color: var(--dsw-text-secondary);
+  white-space: nowrap;
+  padding-top: 2px;
+}
+
+.major .label {
+  color: var(--dsw-text-primary);
+  font-weight: 600;
+}
