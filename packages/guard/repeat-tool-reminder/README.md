@@ -10,7 +10,7 @@ An advisory loop-breaker, not a model-facing tool: it never appears in the tool 
 - id: repeat-tool-reminder
   name: '@deepseek-ai/dsh-repeat-tool-reminder'
   config:
-    thresholds: [3, 5, 8]        # default; consecutive counts that trigger a reminder
+    thresholds: [15, 25, 40]     # default; consecutive counts that trigger a reminder
     include: []                  # tool-name patterns to track; empty ⇒ all tools
     exclude: [todo_write]        # tool-name patterns transparent to the chain
     argumentsPreviewChars: 500   # default; cap on arguments quoted in the detailed reminder

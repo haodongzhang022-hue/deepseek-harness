@@ -26,7 +26,7 @@ export const name = 'repeat-tool-reminder'
  * (`exclude: [mcp_*]` must stay legal in a deployment that loads no MCP tools).
  */
 export interface Config {
-  /** Consecutive-repeat counts that trigger a reminder (default `[3, 5, 8]`). */
+  /** Consecutive-repeat counts that trigger a reminder (default `[15, 25, 40]`). */
   thresholds?: number[]
   /** Tool-name patterns to track; empty means every tool is tracked. */
   include?: string[]
@@ -43,7 +43,7 @@ export interface Config {
 }
 
 export const Config: z<Config> = z.object({
-  thresholds: z.array(z.number()).default([3, 5, 8]),
+  thresholds: z.array(z.number()).default([15, 25, 40]),
   include: z.array(z.string()).default([]),
   exclude: z.array(z.string()).default([]),
   argumentsPreviewChars: z.number().default(500),
