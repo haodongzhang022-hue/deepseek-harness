@@ -31,11 +31,17 @@ export interface RouterEngineOptions {
   readonly transport: WakeTransport
   /** Absent on pipelines without wake addressing; rejections then only track. */
   readonly resolver?: WakeTargetResolver
+  /** States that trigger a wake; each state wakes its item once. Default: rejections only. */
+  readonly wakeStates?: readonly GateItemState[]
 }
 
 /** Drives one gate pipeline. */
 export class RouterEngine {
-  constructor(private readonly options: RouterEngineOptions) {}
+  private readonly wakeStates: ReadonlySet<GateItemState>
+
+  constructor(private readonly options: RouterEngineOptions) {
+    this.wakeStates = new Set(options.wakeStates ?? ['rejected'])
+  }
 
   async tick(): Promise<TickSummary> {
     const current = await this.options.adapter.listItems()
@@ -50,7 +56,7 @@ export class RouterEngine {
     const woken: string[] = []
     const failed: { id: string; error: string }[] = []
     for (const item of current) {
-      if (!needsWake(this.options.ledger, item)) continue
+      if (!needsWake(this, this.options.ledger, item)) continue
 
       const target = await this.resolveTarget(item.sourceLane)
       if (target === null) continue
@@ -61,11 +67,16 @@ export class RouterEngine {
         failed.push({ id: item.id, error: errorMessage(error) })
         continue
       }
-      this.options.ledger.markNotified(item.id)
+      this.options.ledger.markNotified(item.id, item.state)
       woken.push(item.id)
     }
 
     return { events, woken, failed }
+  }
+
+  /** Whether this engine wakes items in the given state. */
+  wantsWakeFor(state: GateItemState): boolean {
+    return this.wakeStates.has(state)
   }
 
   private async resolveTarget(lane: string): Promise<string | null> {
@@ -79,10 +90,10 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-function needsWake(ledger: FileLedger, item: GateItem): boolean {
-  if (item.state !== 'rejected') return false
+function needsWake(engine: RouterEngine, ledger: FileLedger, item: GateItem): boolean {
+  if (!engine.wantsWakeFor(item.state)) return false
   const entry = ledger.get(item.id)
-  return entry === undefined || entry.notifiedState !== 'rejected'
+  return entry === undefined || entry.notifiedState !== item.state
 }
 
 function toSnapshotItem(entry: import('./ledger.ts').LedgerEntry): GateItem {

@@ -43,7 +43,9 @@ describe('automation-router daemon plugin', () => {
     ctx.provide('tools', { execute })
 
     // Awaiting the mount itself joins async apply completion (fiber.ready does not).
-    const fiber = await ctx.plugin(daemon, { serverName: 'releasecontrol', ledgerPath })
+    const fiber = await ctx.plugin(daemon, {
+      gates: [{ name: 'itg-8008', serverName: 'releasecontrol', ledgerPath }],
+    })
 
     const errs = logs.filter(l => l.startsWith('error'))
     expect(errs, errs.join(' || ')).toEqual([])
@@ -58,5 +60,25 @@ describe('automation-router daemon plugin', () => {
 
     // Disposal clears the poll timer.
     await fiber.dispose()
+  })
+
+  it('watches the 8027 staging gate with its own vocabulary and wake policy', async () => {
+    const ledgerPath = join(mkdtempSync(join(tmpdir(), 'router-staging-')), 'ledger.json')
+    const execute = async (input: { arguments?: { status?: string; agents?: boolean } }): Promise<unknown> => {
+      if (input.arguments?.agents === true) return []
+      const records = input.arguments?.status === 'rejected_8027'
+        ? [{ issue_id: 'RC-50', title: 'staging', status: 'rejected_8027', source_port: 8010 }]
+        : []
+      return { content: [{ type: 'text', text: JSON.stringify(records) }] }
+    }
+    const ctx = new Context()
+    ctx.provide('tools', { execute })
+
+    await ctx.plugin(daemon, {
+      gates: [{ name: 'stg-8027', serverName: 'releasecontrol', ledgerPath, gate: 'staging-8027' }],
+    })
+
+    const raw = JSON.parse(readFileSync(ledgerPath, 'utf8')) as { items: Record<string, { lastState: string }> }
+    expect(raw.items['RC-50'].lastState).toBe('rejected')
   })
 })

@@ -62,14 +62,20 @@ export function extractRejectionDetail(record: RawRecord): string | undefined {
   return str(record, 'rejection_reason') ?? str(record, 'summary')
 }
 
-/** Project raw issue records onto generic items; ids missing from a record drop. */
-export function toGateItems(issues: readonly RawRecord[]): GateItem[] {
+/**
+ * Project raw issue records onto generic items using one gate's mapping;
+ * ids missing from a record drop, and statuses outside the map land on
+ * `unmapped` rather than guessing.
+ */
+export function toGateItems(issues: readonly RawRecord[], statusMap?: ReadonlyMap<string, GateItemState>): GateItem[] {
   const items: GateItem[] = []
   for (const issue of issues) {
     const id = str(issue, 'issue_id')
     if (id === undefined) continue
     const status = str(issue, 'status') ?? ''
-    const state = mapReleaseStatus(status)
+    const state = statusMap !== undefined
+      ? statusMap.get(status) ?? 'unmapped'
+      : mapReleaseStatus(status)
     // Only rejections carry a reason worth shipping in the wake message.
     const detail = state === 'rejected' ? extractRejectionDetail(issue) : undefined
     items.push({
@@ -83,21 +89,60 @@ export function toGateItems(issues: readonly RawRecord[]): GateItem[] {
   return items
 }
 
+/** One gate's foreign-status vocabulary mapped onto generic states. */
+export interface StatusMap {
+  readonly queued?: readonly string[]
+  readonly testing?: readonly string[]
+  /** Every listed rejected status wakes eligible items. */
+  readonly rejected: readonly string[]
+  readonly approved?: readonly string[]
+}
+
+/** The 801x-source integration gate (8008) vocabulary observed in production. */
+export const INTEGRATION_8008_STATUS_MAP: StatusMap = {
+  queued: [QUEUED],
+  testing: [TESTING],
+  rejected: [REJECTED_8008, REJECTED_8027],
+  approved: [APPROVED_8008],
+}
+
+/** Staging verification gate (8027): its own test/reject cycle before promotion. */
+export const STAGING_8027_STATUS_MAP: StatusMap = {
+  testing: ['testing_8027'],
+  rejected: ['rejected_8027'],
+  approved: ['approved_8027', 'passed_8027'],
+}
+
+/** Production promotion gate (8028): observation only; terminal rows stay unlisted by default. */
+export const PRODUCTION_8028_STATUS_MAP: StatusMap = {
+  approved: ['production_approved'],
+}
+
 /**
- * Full adapter: lists items across the pipeline's known statuses and resolves
- * a source lane (test-agent port) to the registered live session id.
+ * Full adapter for one gate: lists items across that gate's configured
+ * statuses and resolves a source lane (test-agent port) to the registered
+ * live session id.
  */
 export class ReleaseControlGateAdapter implements PipelineGateAdapter, WakeTargetResolver {
-  readonly name = 'release-control-finance'
+  readonly name: string
+  private readonly watchStatuses: string[]
+  private readonly statusToState: Map<string, GateItemState>
 
-  constructor(private readonly caller: ReleaseControlCaller) {}
+  constructor(private readonly caller: ReleaseControlCaller, options: { name?: string; statusMap?: StatusMap } = {}) {
+    const map = options.statusMap ?? INTEGRATION_8008_STATUS_MAP
+    this.name = options.name ?? 'release-control-finance'
+    this.statusToState = new Map()
+    for (const [state, names] of Object.entries(map)) {
+      for (const foreign of names as readonly string[]) {
+        this.statusToState.set(foreign, state as GateItemState)
+      }
+    }
+    this.watchStatuses = [...this.statusToState.keys()]
+  }
 
   async listItems(): Promise<GateItem[]> {
-    // Terminal production_approved rows are deliberately not listed: they
-    // would grow the ledger forever without adding routing decisions.
-    const statuses = [QUEUED, TESTING, REJECTED_8008, REJECTED_8027, APPROVED_8008]
-    const snapshots = await Promise.all(statuses.map(status => this.caller('list_release_state', { status })))
-    return toGateItems(snapshots.flatMap(extractRecords))
+    const snapshots = await Promise.all(this.watchStatuses.map(status => this.caller('list_release_state', { status })))
+    return toGateItems(snapshots.flatMap(extractRecords), this.statusToState)
   }
 
   async resolve(sourceLane: SourceLane): Promise<string | null> {

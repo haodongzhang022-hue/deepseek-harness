@@ -102,11 +102,11 @@ export class FileLedger {
     this.persist()
   }
 
-  markNotified(id: string): void {
+  markNotified(id: string, state: GateItemState): void {
     this.load()
     const entry = this.items.get(id)
     if (entry === undefined) return
-    entry.notifiedState = entry.lastState
+    entry.notifiedState = state
     entry.notifyCount += 1
     entry.updatedAt = Date.now()
     this.persist()
