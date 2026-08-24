@@ -21,6 +21,8 @@ export interface TickSummary {
   readonly events: readonly GateEvent[]
   /** Items whose rejection wake was dispatched this tick. */
   readonly woken: readonly string[]
+  /** Wake attempts that threw; the item stays un-notified and retries next tick. */
+  readonly failed: readonly { id: string; error: string }[]
 }
 
 export interface RouterEngineOptions {
@@ -46,18 +48,24 @@ export class RouterEngine {
     }
 
     const woken: string[] = []
+    const failed: { id: string; error: string }[] = []
     for (const item of current) {
       if (!needsWake(this.options.ledger, item)) continue
 
       const target = await this.resolveTarget(item.sourceLane)
       if (target === null) continue
 
-      await this.options.transport.deliver(target, item)
+      try {
+        await this.options.transport.deliver(target, item)
+      } catch (error) {
+        failed.push({ id: item.id, error: errorMessage(error) })
+        continue
+      }
       this.options.ledger.markNotified(item.id)
       woken.push(item.id)
     }
 
-    return { events, woken }
+    return { events, woken, failed }
   }
 
   private async resolveTarget(lane: string): Promise<string | null> {
@@ -65,6 +73,10 @@ export class RouterEngine {
     if (resolver === undefined) return null
     return resolver.resolve(lane)
   }
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
 }
 
 function needsWake(ledger: FileLedger, item: GateItem): boolean {

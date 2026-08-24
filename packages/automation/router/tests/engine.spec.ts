@@ -154,3 +154,32 @@ describe('RouterEngine', () => {
 function tempFile(name: string): string {
   return join(mkdtempSync(join(tmpdir(), 'router-spec-')), name + '.json')
 }
+
+describe('RouterEngine delivery failures', () => {
+  it('leaves the item un-notified when delivery throws, then wakes on a later tick', async () => {
+    delivered.length = 0
+    let shouldFail = true
+    const flaky: WakeTransport = {
+      name: 'flaky',
+      deliver: async (sessionId, item) => {
+        if (shouldFail) throw new Error('host down')
+        await recorder.deliver(sessionId, item)
+      },
+    }
+
+    const adapter = fakeAdapter([item('RC-4', 'queued')])
+    const ledger = new FileLedger(tempFile('flaky'))
+    const engine = new RouterEngine({ adapter, ledger, transport: flaky, resolver: fakeResolver('s-flaky') })
+    await engine.tick()
+
+    adapter.set([item('RC-4', 'rejected')])
+    const first = await engine.tick()
+    expect(first.failed).toEqual([{ id: 'RC-4', error: 'host down' }])
+    expect(delivered).toHaveLength(0)
+
+    shouldFail = false
+    const second = await engine.tick()
+    expect(second.woken).toEqual(['RC-4'])
+    expect(delivered).toHaveLength(1)
+  })
+})

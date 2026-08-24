@@ -4,6 +4,7 @@
  */
 
 import type { GateItem } from '@deepseek-ai/dsh-automation-gate'
+import { createUserMessage } from '@deepseek-ai/dsh-session'
 
 /** One delivered wake-up. Implementations must not throw for absent targets. */
 export interface WakeTransport {
@@ -28,5 +29,33 @@ export class LogWakeTransport implements WakeTransport {
   async deliver(sessionId: string, item: GateItem): Promise<void> {
     const line = '[wake] -> ' + sessionId + ': ' + buildWakeText(item)
     console.log(line)
+  }
+}
+
+/** Minimal agent face the in-process transport needs (satisfied by dsh Agent). */
+export interface FollowupTarget {
+  followup(message: unknown): void
+}
+
+/**
+ * Delivers into sessions hosted by the SAME cordis context — the sdk server's
+ * own prompt() path (registry check + followup). A miss throws so the engine
+ * leaves the item un-notified and retries; it never silently drops.
+ */
+export class InProcessWakeTransport implements WakeTransport {
+  readonly name = 'in-process'
+
+  constructor(private readonly lookup: (sessionId: string) => FollowupTarget | undefined) {}
+
+  async deliver(sessionId: string, item: GateItem): Promise<void> {
+    const target = this.lookup(sessionId)
+    if (target === undefined) {
+      throw new Error('no live in-process session for wake target: ' + sessionId)
+    }
+    const message = createUserMessage({
+      content: [{ type: 'text', text: buildWakeText(item) }],
+      source: { kind: 'user' },
+    })
+    target.followup(message)
   }
 }

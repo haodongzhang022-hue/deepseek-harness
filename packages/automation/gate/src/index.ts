@@ -9,13 +9,18 @@ export type GateItemId = string
 /** Port or lane the item originated from (e.g. a test-agent port). */
 export type SourceLane = string
 
-/** Lifecycle states the router tracks per item; adapters map onto these. */
+/**
+ * Lifecycle states the router tracks per item; adapters map onto these.
+ * `unmapped` covers foreign statuses with no routing semantics yet — never
+ * silently collapse an unknown status onto a meaningful one.
+ */
 export type GateItemState =
   | 'queued'
   | 'testing'
   | 'passed'
   | 'rejected'
   | 'approved'
+  | 'unmapped'
 
 /** One item as an adapter reports it — plain data only. */
 export interface GateItem {
