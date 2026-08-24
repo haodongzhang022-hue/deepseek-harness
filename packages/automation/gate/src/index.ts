@@ -44,6 +44,16 @@ export interface PipelineGateAdapter {
 }
 
 /**
+ * Optional adapter capability: resolve where a lane's work lives so the
+ * router can wake it. Returns null when the lane has no known live target;
+ * callers treat that as retry-later, not failure.
+ */
+export interface WakeTargetResolver {
+  /** Resolve one source lane (e.g. a test-agent port) to a session id. */
+  resolve(sourceLane: SourceLane): Promise<string | null>
+}
+
+/**
  * Diff two snapshots into events. Unknown-in-prev items emit submitted;
  * known items changing state emit state-changed. Ids must be unique within
  * each snapshot; duplicates throw — adapters normalize before calling.
