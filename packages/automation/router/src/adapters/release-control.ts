@@ -80,7 +80,7 @@ export function toGateItems(issues: readonly RawRecord[], statusMap?: ReadonlyMa
     const detail = state === 'rejected' ? extractRejectionDetail(issue) : undefined
     items.push({
       id,
-      sourceLane: String(issue.source_port ?? 'unknown'),
+      sourceLane: typeof issue.source_port === 'string' || typeof issue.source_port === 'number' ? String(issue.source_port) : 'unknown',
       title: str(issue, 'title') ?? id,
       state,
       ...(detail !== undefined ? { detail } : {}),
@@ -151,6 +151,64 @@ export class ReleaseControlGateAdapter implements PipelineGateAdapter, WakeTarge
     const match = extractRecords(registry).find(agent => agent.port === port && agent.live === true)
     const sessionId = match === undefined ? undefined : str(match, 'session_id')
     return sessionId ?? null
+  }
+}
+
+/** Default per-request timeout for the REST data channel. */
+export const DEFAULT_HTTP_TIMEOUT_MS = 15_000
+
+/** One agent row from GET /api/v3/pipeline/status active_agents. */
+interface PipelineStatusAgent {
+  port?: unknown
+  status?: unknown
+  session_id?: unknown
+}
+
+/** One issue summary row from issues_by_status. */
+interface PipelineStatusIssue extends RawRecord {}
+
+/** Payload face of GET /api/v3/pipeline/status this caller consumes. */
+interface PipelineStatusPayload {
+  active_agents?: PipelineStatusAgent[]
+  issues_by_status?: Record<string, PipelineStatusIssue[]>
+}
+
+/**
+ * REST data channel against the pipeline HTTP API. Speaks the same call seam
+ * as the MCP path so one adapter serves both; listing answers arrive as bare
+ * record arrays with the grouping status written back onto each row.
+ */
+export class HttpReleaseControlCaller {
+  private readonly baseUrl: string
+  private readonly fetchImpl: typeof fetch
+  private readonly timeoutMs: number
+
+  constructor(options: { baseUrl: string; fetchImpl?: typeof fetch; timeoutMs?: number }) {
+    this.baseUrl = options.baseUrl.replace(/\/+$/, '')
+    this.fetchImpl = options.fetchImpl ?? fetch
+    this.timeoutMs = options.timeoutMs ?? DEFAULT_HTTP_TIMEOUT_MS
+  }
+
+  /** ReleaseControlCaller face; only the listing tool exists over REST. */
+  readonly call = async (name: string, args: Record<string, unknown>): Promise<unknown> => {
+    if (name !== 'list_release_state') {
+      throw new Error('http channel supports list_release_state only, got ' + name)
+    }
+    const response = await this.fetchImpl(this.baseUrl + '/api/v3/pipeline/status', {
+      signal: AbortSignal.timeout(this.timeoutMs),
+    })
+    if (!response.ok) throw new Error('pipeline status http ' + String(response.status))
+    const payload = await response.json() as PipelineStatusPayload
+    if (args.agents === true) {
+      return (payload.active_agents ?? []).map(agent => ({
+        port: agent.port,
+        live: agent.status === 'available',
+        session_id: agent.session_id,
+      }))
+    }
+    const status = typeof args.status === 'string' ? args.status : ''
+    const issues = payload.issues_by_status?.[status] ?? []
+    return issues.map(issue => ({ ...issue, status }))
   }
 }
 

@@ -1,5 +1,60 @@
 import { describe, expect, it } from 'vitest'
-import { ReleaseControlGateAdapter, mapReleaseStatus, toGateItems } from '../src/adapters/release-control.ts'
+import { HttpReleaseControlCaller, ReleaseControlGateAdapter, mapReleaseStatus, toGateItems } from '../src/adapters/release-control.ts'
+
+function fakeFetch(body: unknown, ok = true) {
+  return (async () => ({ ok, status: ok ? 200 : 503, json: async () => body })) as unknown as typeof fetch
+}
+
+describe('HttpReleaseControlCaller', () => {
+  it('projects issues_by_status rows with the grouping status written back', async () => {
+    const caller = new HttpReleaseControlCaller({
+      baseUrl: 'http://gate.test/',
+      fetchImpl: fakeFetch({
+        active_agents: [],
+        issues_by_status: { rejected_8008: [{ issue_id: 'RC-1', source_port: 8012, title: 'x' }] },
+      }),
+    })
+
+    const records = await caller.call('list_release_state', { status: 'rejected_8008' }) as Array<Record<string, unknown>>
+    expect(records).toHaveLength(1)
+    expect(records[0]).toMatchObject({ issue_id: 'RC-1', status: 'rejected_8008' })
+  })
+
+  it('maps active agents onto the live/session face the resolver reads', async () => {
+    const caller = new HttpReleaseControlCaller({
+      baseUrl: 'http://gate.test',
+      fetchImpl: fakeFetch({ active_agents: [{ port: 8014, status: 'available', session_id: 's-1' }], issues_by_status: {} }),
+    })
+
+    const records = await caller.call('list_release_state', { agents: true }) as Array<Record<string, unknown>>
+    expect(records).toEqual([{ port: 8014, live: true, session_id: 's-1' }])
+  })
+
+  it('fails loud on non-2xx answers and on tools the channel cannot serve', async () => {
+    const caller = new HttpReleaseControlCaller({ baseUrl: 'http://gate.test', fetchImpl: fakeFetch({}, false) })
+    await expect(caller.call('list_release_state', { status: 'queued_8008' })).rejects.toThrow(/http 503/)
+    await expect(caller.call('submit_change', {})).rejects.toThrow(/list_release_state only/)
+  })
+
+  it('feeds the gate adapter end to end over one REST payload', async () => {
+    const caller = new HttpReleaseControlCaller({
+      baseUrl: 'http://gate.test',
+      fetchImpl: fakeFetch({
+        active_agents: [],
+        issues_by_status: {
+          rejected_8008: [{ issue_id: 'RC-9', source_port: 8013, title: 'r' }],
+          queued_8008: [{ issue_id: 'RC-10', source_port: 8014, title: 'q' }],
+        },
+      }),
+    })
+    const adapter = new ReleaseControlGateAdapter(caller.call.bind(caller), { name: 'itg' })
+
+    const items = await adapter.listItems()
+    expect(items).toHaveLength(2)
+    expect(items.find(i => i.id === 'RC-9')).toMatchObject({ state: 'rejected', sourceLane: '8013' })
+    expect(items.find(i => i.id === 'RC-10')).toMatchObject({ state: 'queued' })
+  })
+})
 
 describe('mapReleaseStatus', () => {
   it('maps the known finance statuses onto generic states', () => {

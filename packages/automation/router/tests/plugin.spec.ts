@@ -81,4 +81,48 @@ describe('automation-router daemon plugin', () => {
     const raw = JSON.parse(readFileSync(ledgerPath, 'utf8')) as { items: Record<string, { lastState: string }> }
     expect(raw.items['RC-50'].lastState).toBe('rejected')
   })
+
+  it('serves the http-rest channel with no tools service present in the host', async () => {
+    const ledgerPath = join(mkdtempSync(join(tmpdir(), 'router-http-')), 'ledger.json')
+    const fetchCalls: string[] = []
+    const stubFetch = (async (url: unknown): Promise<unknown> => {
+      fetchCalls.push(String(url))
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          active_agents: [],
+          issues_by_status: { rejected_8008: [{ issue_id: 'RC-88', source_port: 8015, title: 'rest' }] },
+        }),
+      }
+    }) as unknown as typeof fetch
+    const originalFetch = globalThis.fetch
+    globalThis.fetch = stubFetch
+    try {
+      const ctx = new Context()
+      // Deliberately no tools service: the http channel must not need one.
+
+      await ctx.plugin(daemon, {
+        gates: [{ name: 'itg-http', serverName: 'unused', ledgerPath, channel: 'http-rest', httpBaseUrl: 'http://gate.test' }],
+      })
+
+      await vi.waitFor(() => {
+        expect(fetchCalls.some(u => u.includes('/api/v3/pipeline/status'))).toBe(true)
+        expect(existsSync(ledgerPath)).toBe(true)
+      })
+      const raw = JSON.parse(readFileSync(ledgerPath, 'utf8')) as { items: Record<string, { lastState: string }> }
+      expect(raw.items['RC-88'].lastState).toBe('rejected')
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+  })
+
+  it('fails loud at watcher start when the mcp channel lacks a tools service', async () => {
+    const ctx = new Context()
+    ctx.provide('logger', { info(): void {}, warn(): void {}, error(): void {}, debug(): void {}, success(): void {} })
+
+    await expect(ctx.plugin(daemon, {
+      gates: [{ name: 'no-tools', serverName: 'releasecontrol', ledgerPath: join(mkdtempSync(join(tmpdir(), 'router-missing-')), 'l.json') }],
+    })).rejects.toThrow(/requires the tools service/)
+  })
 })

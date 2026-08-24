@@ -7,11 +7,12 @@ Automation gate-router: polls a `PipelineGateAdapter`, diffs snapshots, persists
 - `RouterEngine.tick()` - derives wake need declaratively from the current snapshot plus the ledger; diff events stay informational.
 - `FileLedger` - schema-versioned JSON file with atomic tmp+rename writes; tracks identity/state plus wake bookkeeping (`notifiedState`, retry count).
 - Wake transports: `LogWakeTransport` (dry run) and `InProcessWakeTransport` (same-context session followup). A failed delivery stays un-notified and retries next tick; an unresolvable target defers silently.
-- `ReleaseControlGateAdapter` - finance release-control binding over an injected caller seam (bound to `ctx.tools.execute` by the plugin); extracts rejection reasons from the gate-results trail with feedback/flat fallbacks, and resolves a lane to a live registered session only.
+- `ReleaseControlGateAdapter` - finance release-control binding over an injected caller seam; extracts rejection reasons from the gate-results trail with feedback/flat fallbacks, and resolves a lane to a live registered session only.
+- Data channels behind one caller seam: `mcp-tools` binds `ctx.tools.execute` per MCP namespace (resolved via strict `ctx.get`, failing loud when absent); `http-rest` speaks `GET {httpBaseUrl}/api/v3/pipeline/status` directly, so hosts without a tool service watch the same pipeline truthfully.
 
 ## Plugin config
 
-`serverName` (MCP namespace), `ledgerPath` (required), `pollIntervalMs` (default 60s), `transport` (`log` default | `in-process`).
+`serverName` (MCP namespace), `ledgerPath` (required), `pollIntervalMs` (default 60s), `transport` (`log` default | `in-process` wake delivery), `channel` (`mcp-tools` default | `http-rest`), and for `http-rest`: `httpBaseUrl` (required) plus `httpTimeoutMs` (default 15s). REST listing answers carry status-grouped issue summaries, so rejection reasons arrive only through the MCP channel today.
 
 ## Known Limitations and Deferred Work
 

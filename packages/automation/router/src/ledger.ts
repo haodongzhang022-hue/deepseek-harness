@@ -25,7 +25,8 @@ export interface LedgerEntry {
 
 interface LedgerFile {
   version: number
-  items: Record<string, LedgerEntry>
+  /** Widened on read: corrupt files may hold null despite the write-side type. */
+  items: Record<string, LedgerEntry> | null
 }
 
 /**
@@ -51,7 +52,7 @@ export class FileLedger {
     }
     try {
       const parsed = JSON.parse(raw) as LedgerFile
-      if (parsed.version !== LEDGER_SCHEMA_VERSION || typeof parsed.items !== 'object' || parsed.items === null) {
+      if (parsed.version !== LEDGER_SCHEMA_VERSION || parsed.items === null || typeof parsed.items !== 'object') {
         return
       }
       for (const entry of Object.values(parsed.items)) {

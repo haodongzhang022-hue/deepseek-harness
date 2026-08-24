@@ -26,9 +26,9 @@ export function buildWakeText(item: GateItem): string {
 export class LogWakeTransport implements WakeTransport {
   readonly name = 'log'
 
-  async deliver(sessionId: string, item: GateItem): Promise<void> {
-    const line = '[wake] -> ' + sessionId + ': ' + buildWakeText(item)
-    console.log(line)
+  deliver(sessionId: string, item: GateItem): Promise<void> {
+    console.log('[wake] -> ' + sessionId + ': ' + buildWakeText(item))
+    return Promise.resolve()
   }
 }
 
@@ -47,10 +47,10 @@ export class InProcessWakeTransport implements WakeTransport {
 
   constructor(private readonly lookup: (sessionId: string) => FollowupTarget | undefined) {}
 
-  async deliver(sessionId: string, item: GateItem): Promise<void> {
+  deliver(sessionId: string, item: GateItem): Promise<void> {
     const target = this.lookup(sessionId)
     if (target === undefined) {
-      throw new Error('no live in-process session for wake target: ' + sessionId)
+      return Promise.reject(new Error('no live in-process session for wake target: ' + sessionId))
     }
     const message = createUserMessage({
       content: [{ type: 'text', text: buildWakeText(item) }],

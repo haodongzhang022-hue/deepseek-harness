@@ -16,14 +16,17 @@ import { FileLedger } from './ledger.ts'
 import { RouterEngine } from './engine.ts'
 import { LogWakeTransport, InProcessWakeTransport } from './wake-transport.ts'
 import type { WakeTransport } from './wake-transport.ts'
-import { ReleaseControlGateAdapter, INTEGRATION_8008_STATUS_MAP, STAGING_8027_STATUS_MAP, PRODUCTION_8028_STATUS_MAP } from './adapters/release-control.ts'
+import { ReleaseControlGateAdapter, HttpReleaseControlCaller, DEFAULT_HTTP_TIMEOUT_MS, INTEGRATION_8008_STATUS_MAP, STAGING_8027_STATUS_MAP, PRODUCTION_8028_STATUS_MAP } from './adapters/release-control.ts'
 import type { RawRecord, ReleaseControlCaller } from './adapters/release-control.ts'
 
 /** Plugin name used by loader diagnostics. */
 export const name = 'automation-router'
 
-/** Services required by this plugin. */
-export const inject = ['tools']
+/**
+ * The tools registry resolves lazily via strict ctx.get: the http-rest
+ * data channel needs no tool service at all, and a static injection would
+ * block startup on hosts that never activate one.
+ */
 
 /** Valid MCP serverName the caller seam resolves against. */
 const SERVER_NAME_PATTERN = /^[A-Za-z0-9_-]{1,32}$/
@@ -44,6 +47,12 @@ export interface GateWatchConfig {
   wakeStates?: GateItemState[]
   /** Which gate vocabulary to watch; defaults to the 8008 integration gate. */
   gate?: 'integration-8008' | 'staging-8027' | 'production-8028'
+  /** Data channel: MCP tool calls (default) or direct pipeline REST. */
+  channel?: 'mcp-tools' | 'http-rest'
+  /** Pipeline API base for the http-rest channel, e.g. http://localhost:8008. */
+  httpBaseUrl?: string
+  /** Per-request timeout for the http-rest channel. */
+  httpTimeoutMs?: number
 }
 
 /** Daemon configuration: one or more resident gate watchers. */
@@ -66,12 +75,15 @@ function gateConfigSchema(): z<GateWatchConfig> {
     transport: z.union([z.const('log'), z.const('in-process')]).default('log'),
     wakeStates: z.array(String),
     gate: z.union([z.const('integration-8008'), z.const('staging-8027'), z.const('production-8028')]).default('integration-8008'),
+    channel: z.union([z.const('mcp-tools'), z.const('http-rest')]).default('mcp-tools'),
+    httpBaseUrl: z.string(),
+    httpTimeoutMs: z.number().min(1_000).max(MAX_TIMER_DELAY_MS),
   }) as unknown as z<GateWatchConfig>
 }
 
 export const Config: z<RouterConfig> = z.object({
   gates: z.array(gateConfigSchema()).min(1),
-}) as unknown as z<RouterConfig>
+})
 
 /**
  * Pull raw records out of one executed tool result: MCP list payloads arrive
@@ -110,17 +122,42 @@ function isRecord(value: unknown): value is RawRecord {
   return typeof value === 'object' && value !== null
 }
 
+/** Registry face bindCaller needs; satisfied by the dsh tools service. */
+interface ToolsExecutor {
+  execute(input: Record<string, unknown>): Promise<unknown>
+}
+
 /** Caller seam over the registry public execute path, namespaced per server. */
-function bindCaller(ctx: Context, serverName: string): ReleaseControlCaller {
+function bindCaller(ctx: Context, serverName: string, tools: ToolsExecutor): ReleaseControlCaller {
   return async (toolName, args) => {
-    const result = await ctx.tools.execute({
-      callId: name + ':' + toolName + ':' + randomUUID() as never,
+    const result = await tools.execute({
+      callId: name + ':' + toolName + ':' + randomUUID(),
       name: 'mcp__' + serverName + '__' + toolName,
       arguments: args,
       signal: new AbortController().signal,
     })
     return extractRecordsFromToolResult(result)
   }
+}
+
+/**
+ * Bind the data channel for one gate: direct REST when configured, otherwise
+ * the MCP tool path, which fails loud here when the host has no registry —
+ * the earliest resolvable point, before any watcher interval is armed.
+ */
+function resolveCaller(ctx: Context, watch: GateWatchConfig): ReleaseControlCaller {
+  if (watch.channel === 'http-rest') {
+    if (typeof watch.httpBaseUrl !== 'string' || watch.httpBaseUrl === '') {
+      throw new Error('automation-router(' + watch.name + '): channel "http-rest" requires httpBaseUrl')
+    }
+    const caller = new HttpReleaseControlCaller({ baseUrl: watch.httpBaseUrl, timeoutMs: watch.httpTimeoutMs ?? DEFAULT_HTTP_TIMEOUT_MS })
+    return caller.call
+  }
+  const tools = ctx.get('tools') as { execute(input: Record<string, unknown>): Promise<unknown> } | undefined
+  if (tools === undefined) {
+    throw new Error('automation-router(' + watch.name + '): channel "mcp-tools" requires the tools service in this host')
+  }
+  return bindCaller(ctx, watch.serverName, tools)
 }
 
 function resolveTransport(ctx: Context, watch: GateWatchConfig): WakeTransport {
@@ -149,7 +186,7 @@ export async function apply(ctx: Context, config: RouterConfig): Promise<void> {
 
 async function startWatcher(ctx: Context, watch: GateWatchConfig): Promise<void> {
   const vocabulary = GATE_VOCABULARIES[watch.gate ?? 'integration-8008']
-  const adapter = new ReleaseControlGateAdapter(bindCaller(ctx, watch.serverName), { name: watch.name, statusMap: vocabulary })
+  const adapter = new ReleaseControlGateAdapter(resolveCaller(ctx, watch), { name: watch.name, statusMap: vocabulary })
   const ledger = new FileLedger(watch.ledgerPath)
   const transport = resolveTransport(ctx, watch)
   const wakeStates = (watch.wakeStates as readonly GateItemState[] | undefined) ?? ['rejected']
