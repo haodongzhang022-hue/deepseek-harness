@@ -1,0 +1,62 @@
+import { describe, expect, it, vi } from 'vitest'
+import { existsSync, mkdtempSync, readFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { Context } from '@deepseek-ai/cordis'
+import { extractRecordsFromToolResult } from '../src/plugin.ts'
+import * as daemon from '../src/plugin.ts'
+
+describe('extractRecordsFromToolResult', () => {
+  it('parses a bare-array JSON text block', () => {
+    const result = { content: [{ type: 'text', text: JSON.stringify([{ issue_id: 'RC-1' }]) }] }
+    expect(extractRecordsFromToolResult(result)).toEqual([{ issue_id: 'RC-1' }])
+  })
+
+  it('unwraps an envelope holding one array', () => {
+    const result = { content: [{ type: 'text', text: JSON.stringify({ issues: [{ issue_id: 'RC-2' }] }) }] }
+    expect(extractRecordsFromToolResult(result)).toEqual([{ issue_id: 'RC-2' }])
+  })
+
+  it('returns empty on error results and non-JSON text', () => {
+    expect(extractRecordsFromToolResult({ isError: true, content: [] })).toEqual([])
+    expect(extractRecordsFromToolResult({ content: [{ type: 'text', text: 'gateway timeout html' }] })).toEqual([])
+  })
+})
+
+describe('automation-router daemon plugin', () => {
+  it('performs a first tick at startup, persists the ledger, and disposes its timer', async () => {
+    const ledgerPath = join(mkdtempSync(join(tmpdir(), 'router-plugin-')), 'ledger.json')
+    const calls: string[] = []
+    const execute = async (input: { name: string; arguments: unknown }): Promise<unknown> => {
+      calls.push(input.name)
+      if (input.arguments && typeof input.arguments === 'object' && 'agents' in input.arguments) return []
+      const status = (input.arguments as { status?: string }).status ?? ''
+      const records = status === 'rejected_8008'
+        ? [{ issue_id: 'RC-77', title: 't', status, source_port: 8010, rejection_reason: 'r' }]
+        : []
+      return { content: [{ type: 'text', text: JSON.stringify(records) }] }
+    }
+    const ctx = new Context()
+    const logs: string[] = []
+    const capture = (level: string) => (...args: unknown[]): void => { logs.push(level + ': ' + args.map(String).join(' ')) }
+    ctx.provide('logger', { info: capture('info'), warn: capture('warn'), error: capture('error'), debug: capture('debug'), success: capture('success') })
+    ctx.provide('tools', { execute })
+
+    // Awaiting the mount itself joins async apply completion (fiber.ready does not).
+    const fiber = await ctx.plugin(daemon, { serverName: 'releasecontrol', ledgerPath })
+
+    const errs = logs.filter(l => l.startsWith('error'))
+    expect(errs, errs.join(' || ')).toEqual([])
+
+    // Loader timing may resolve ready before the inline first tick settles.
+    await vi.waitFor(() => {
+      expect(calls.some(c => c === 'mcp__releasecontrol__list_release_state')).toBe(true)
+      expect(existsSync(ledgerPath)).toBe(true)
+    })
+    const raw = JSON.parse(readFileSync(ledgerPath, 'utf8')) as { items: Record<string, { lastState: string }> }
+    expect(raw.items['RC-77'].lastState).toBe('rejected')
+
+    // Disposal clears the poll timer.
+    await fiber.dispose()
+  })
+})

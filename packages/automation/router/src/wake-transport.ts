@@ -4,7 +4,7 @@
  */
 
 import type { GateItem } from '@deepseek-ai/dsh-automation-gate'
-import { createUserMessage } from '@deepseek-ai/dsh-session'
+import { createUserMessage } from '@deepseek-ai/dsh-llm'
 
 /** One delivered wake-up. Implementations must not throw for absent targets. */
 export interface WakeTransport {
