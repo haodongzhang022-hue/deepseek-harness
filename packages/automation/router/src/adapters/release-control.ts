@@ -38,6 +38,30 @@ function str(record: RawRecord, key: string): string | undefined {
   return typeof value === 'string' ? value : undefined
 }
 
+/**
+ * Pull the most recent rejection reason off a record: the gate-results trail
+ * is authoritative (last rejected decision wins), the feedback trail is the
+ * fallback, and a flat legacy field comes last.
+ */
+export function extractRejectionDetail(record: RawRecord): string | undefined {
+  const gates = record.gate_results
+  if (Array.isArray(gates)) {
+    const rejected = gates.filter(isRecord).filter(g => g.decision === 'rejected')
+    const last = rejected[rejected.length - 1]
+    const reason = last === undefined ? undefined : str(last, 'rejection_reason')
+    if (reason !== undefined) return reason
+  }
+
+  const feedback = record.feedback
+  if (Array.isArray(feedback)) {
+    const last = feedback.filter(isRecord)[feedback.length - 1]
+    const reason = last === undefined ? undefined : str(last, 'reason')
+    if (reason !== undefined) return reason
+  }
+
+  return str(record, 'rejection_reason') ?? str(record, 'summary')
+}
+
 /** Project raw issue records onto generic items; ids missing from a record drop. */
 export function toGateItems(issues: readonly RawRecord[]): GateItem[] {
   const items: GateItem[] = []
@@ -45,12 +69,14 @@ export function toGateItems(issues: readonly RawRecord[]): GateItem[] {
     const id = str(issue, 'issue_id')
     if (id === undefined) continue
     const status = str(issue, 'status') ?? ''
-    const detail = str(issue, 'rejection_reason') ?? str(issue, 'summary')
+    const state = mapReleaseStatus(status)
+    // Only rejections carry a reason worth shipping in the wake message.
+    const detail = state === 'rejected' ? extractRejectionDetail(issue) : undefined
     items.push({
       id,
       sourceLane: String(issue.source_port ?? 'unknown'),
       title: str(issue, 'title') ?? id,
-      state: mapReleaseStatus(status),
+      state,
       ...(detail !== undefined ? { detail } : {}),
     })
   }

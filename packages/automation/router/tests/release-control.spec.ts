@@ -17,14 +17,18 @@ describe('mapReleaseStatus', () => {
 })
 
 describe('toGateItems', () => {
-  it('carries the rejection reason as detail and ports as lanes', () => {
+  it('carries the rejection reason as detail and ports as lanes (gate_results first)', () => {
     const items = toGateItems([
       {
         issue_id: 'RC-7',
         title: '因子校准',
         status: 'rejected_8008',
         source_port: 8011,
-        rejection_reason: 'http:8008:/health 未通过',
+        gate_results: [
+          { decision: 'approved', at: 'earlier' },
+          { decision: 'rejected', at: 'later', rejection_reason: '门禁未通过：健康检查失败' },
+        ],
+        feedback: [{ reason: '更早的反馈' }],
       },
     ])
 
@@ -33,8 +37,20 @@ describe('toGateItems', () => {
       id: 'RC-7',
       sourceLane: '8011',
       state: 'rejected',
-      detail: 'http:8008:/health 未通过',
+      detail: '门禁未通过：健康检查失败',
     })
+  })
+
+  it('falls back to the feedback trail then flat legacy fields', () => {
+    const [viaFeedback] = toGateItems([
+      { issue_id: 'A', status: 'rejected_8008', feedback: [{ reason: 'feedback原因' }] },
+    ])
+    expect(viaFeedback.detail).toBe('feedback原因')
+
+    const [viaFlat] = toGateItems([
+      { issue_id: 'B', status: 'rejected_8008', rejection_reason: 'flat原因' },
+    ])
+    expect(viaFlat.detail).toBe('flat原因')
   })
 
   it('drops records without an issue id', () => {
