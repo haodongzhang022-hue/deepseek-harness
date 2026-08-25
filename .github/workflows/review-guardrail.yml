@@ -1,0 +1,66 @@
+name: review-guardrail
+
+# review-guardrail 静态评审 + 合并门禁。
+# 只跑 static 路线（零外部依赖、不需要密钥），作为"信号灯 + 行级评审 + 门禁"的第一个落地档。
+# 想升级到 llm/hybrid：把下面的 --route static 改掉，并在仓库配置 DEEPSEEK_API_KEY 密钥。
+
+on:
+  workflow_dispatch: # 手动触发：Actions 页面 Run workflow
+  pull_request:
+    types: [opened, synchronize, ready_for_review]
+
+permissions:
+  contents: read
+
+jobs:
+  guardrail-static:
+    runs-on: ubuntu-latest
+    env:
+      DEV_HOME: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # 需要 base.sha 才能算区间 diff
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      # 1) 信号灯断言：任何提交先跑护栏脚本，红灯即阻塞，不放行后续
+      - name: 信号灯断言
+        run: |
+          PYTHONPATH="$DEV_HOME/review-guardrail" \
+          GUARDRAIL_CONFIG="$DEV_HOME/review-guardrail/guardrail.yml" \
+          python -m review_guardrail asserts
+
+      # 2) 静态行级评审：真实 diff 新增行，按 安全→缺陷→质量→性能 出 finding
+      - name: 静态行级评审
+        run: |
+          PYTHONPATH="$DEV_HOME/review-guardrail" \
+          GUARDRAIL_CONFIG="$DEV_HOME/review-guardrail/guardrail.yml" \
+          python -m review_guardrail review \
+            --route static \
+            --repo "$DEV_HOME" \
+            --base "${{ github.event.pull_request.base.sha || 'origin/master' }}" \
+            --head "${{ github.event.pull_request.head.sha || github.sha }}" \
+            --format json --out review.json || echo "::notice::评审有 finding，详见 review.json"
+
+      # 评审证据落档：红灯/绿灯都留档 review.json，Actions 页可下载排查
+      - name: 上传评审证据
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: review-guardrail-report
+          path: review.json
+          if-no-files-found: error
+
+      # 3) 合并门禁：信号灯 + 评审 verdict，红灯返回非零，CI 归于失败
+      - name: 合并门禁
+        run: |
+          PYTHONPATH="$DEV_HOME/review-guardrail" \
+          GUARDRAIL_CONFIG="$DEV_HOME/review-guardrail/guardrail.yml" \
+          python -m review_guardrail gate \
+            --route static \
+            --repo "$DEV_HOME" \
+            --base "${{ github.event.pull_request.base.sha || 'origin/master' }}" \
+            --head "${{ github.event.pull_request.head.sha || github.sha }}"
