@@ -236,4 +236,69 @@ describe('released Session format v0 to v1', () => {
     expect(() => { sessionFormatV0ToV1.validateTarget(extendedKnownPayload) }).toThrow(/unexpected member/)
     expect(() => restoreReleasedV1Artifact(extendedKnownPayload, generatedCurrentTypes)).not.toThrow()
   })
+
+  it('splits legacy flat pi-ai replay envelopes on chunks and message sources', () => {
+    const header = {
+      type: 'session', version: 0, id: 'replay-split', createdAt: 1, delegationDepth: 0,
+    }
+    const flatEnvelope = {
+      kind: 'pi-ai', version: 1, api: 'openai-completions', provider: 'go', model: 'deepseek-v4-flash',
+      responseId: 'response', stopReason: 'toolUse', blocks: [{ type: 'text' }],
+    }
+    const splitEnvelope = {
+      response: {
+        kind: 'pi-ai', version: 2, api: 'openai-completions', provider: 'go', model: 'deepseek-v4-flash',
+        responseId: 'response', stopReason: 'toolUse',
+      },
+      blocks: [{ type: 'text' }],
+    }
+    const rows = [
+      { type: 'turn/start', seq: 0, time: 1, data: { turn: 1 } },
+      { type: 'step/start', seq: 1, time: 2, data: { turn: 1, step: 1 } },
+      {
+        type: 'assistant/chunk', seq: 2, time: 3,
+        data: { turn: 1, step: 1, chunk: { type: 'finish', reason: { kind: 'stop' }, replayState: flatEnvelope } },
+      },
+      {
+        type: 'assistant/message', seq: 3, time: 4, sourceEventSeqs: [2], surfaceOp: 'append',
+        data: {
+          turn: 1, step: 1,
+          message: {
+            id: 'assistant', role: 'assistant', content: [{ type: 'text', text: 'hello' }],
+            source: { kind: 'model', provider: 'go', model: 'deepseek-v4-flash', replayState: flatEnvelope },
+          },
+        },
+      },
+    ]
+
+    const migrated = sessionFormatV0ToV1.migrate(releasedV0SessionFormatCodec.decodeArtifact(header, rows))
+
+    const chunk = migrated.events[2]!.data['chunk'] as { replayState: unknown }
+    const source = (migrated.events[3]!.data as { message: { source: { replayState: unknown } } }).message.source
+    expect(chunk.replayState).toEqual(splitEnvelope)
+    expect(source.replayState).toEqual(splitEnvelope)
+  })
+
+  it('promotes released legacy subagent descriptors from version 2 to 3', () => {
+    const header = {
+      type: 'session', version: 0, id: 'descriptor-promote', createdAt: 1, delegationDepth: 0,
+    }
+    const rows = [
+      { type: 'turn/start', seq: 0, time: 1, data: { turn: 1 } },
+      {
+        type: 'subagent/descriptor', seq: 1, time: 2,
+        data: {
+          version: 2, mode: 'continuable', provider: 'spawn', label: 'child',
+          agentProvider: 'go', agentModel: 'deepseek-v4-flash',
+        },
+      },
+    ]
+
+    const migrated = sessionFormatV0ToV1.migrate(releasedV0SessionFormatCodec.decodeArtifact(header, rows))
+
+    expect(migrated.events[1]!.data).toEqual({
+      version: 3, mode: 'continuable', provider: 'spawn', label: 'child',
+      agentProvider: 'go', agentModel: 'deepseek-v4-flash',
+    })
+  })
 })

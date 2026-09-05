@@ -62,8 +62,10 @@ function normalizeReleasedV0Events(
     const header = normalizeLegacyRequestHeader(end, sessionId)
     const steering = normalizeLegacySteering(header, sessionId)
     const message = normalizeLegacyMessage(steering, sessionId, messageIds)
-    assertReleasedEventPayload(message, 0)
-    output.push(message)
+    const replayed = normalizeLegacyReplayEnvelope(message)
+    const descriptor = normalizeLegacySubagentDescriptor(replayed)
+    assertReleasedEventPayload(descriptor, 0)
+    output.push(descriptor)
     const messageId = eventMessageId(message)
     if (messageId !== undefined) messageIds.set(message.seq, messageId)
   }
@@ -276,6 +278,64 @@ function normalizeLegacyMessage(
     default:
       return event
   }
+}
+
+/**
+ * Split the legacy flat pi-ai replay envelope into the released split shape.
+ * Pre-0.1.3-alpha.1 builds stored the adapter envelope flat on the terminal
+ * `finish` chunk and the assembled model source; the released v1/v2 vocabulary
+ * carries the same facts split as `{ response, blocks }`, so the migration
+ * converts the shape instead of refusing committed generations. Only the
+ * envelope whose top level lacks `response` and carries a string `kind` is
+ * legacy; anything else passes through for the payload validator to judge.
+ */
+function normalizeLegacyReplayEnvelope(event: SessionFormatEvent): SessionFormatEvent {
+  const data = releasedV0Record(event.data, `${event.type} ${event.seq} data`)
+  if (event.type === 'assistant/chunk') {
+    const chunk = releasedV0Record(data['chunk'], `assistant/chunk ${event.seq} chunk`)
+    if (chunk['type'] !== 'finish' || !releasedIsRecord(chunk['replayState'])) return event
+    const replayState = normalizeLegacyReplayEnvelopeValue(chunk['replayState'])
+    if (replayState === undefined) return event
+    return { ...event, data: { ...data, chunk: { ...chunk, replayState } } }
+  }
+  if (event.type === 'assistant/message') {
+    const message = releasedV0Record(data['message'], `assistant/message ${event.seq} message`)
+    const source = releasedV0Record(message['source'], `assistant/message ${event.seq} source`)
+    if (!releasedIsRecord(source['replayState'])) return event
+    const replayState = normalizeLegacyReplayEnvelopeValue(source['replayState'])
+    if (replayState === undefined) return event
+    return { ...event, data: { ...data, message: { ...message, source: { ...source, replayState } } } }
+  }
+  return event
+}
+
+/** Convert one flat legacy envelope; returns undefined when it is not legacy. */
+function normalizeLegacyReplayEnvelopeValue(
+  value: SessionFormatJsonValue,
+): SessionFormatJsonObject | undefined {
+  if (!releasedIsRecord(value) || Object.hasOwn(value, 'response') || typeof value['kind'] !== 'string') {
+    return undefined
+  }
+  const { blocks: _blocks, ...response } = value
+  return {
+    response: { ...response, version: 2 },
+    ...Object.hasOwn(value, 'blocks') ? { blocks: value['blocks'] } : {},
+  }
+}
+
+/**
+ * Promote released subagent descriptors from the legacy version-2 shape.
+ * Pre-0.1.3-alpha.1 builds recorded `version: 2` with the same fields the
+ * released v3 shape requires; only the version changes. Other versions keep
+ * their existing refusal so genuinely unsupported descriptor generations stay
+ * loud.
+ */
+function normalizeLegacySubagentDescriptor(event: SessionFormatEvent): SessionFormatEvent {
+  if (event.type !== 'subagent/descriptor') return event
+  const data = releasedV0Record(event.data, `subagent/descriptor ${event.seq} data`)
+  if (data['version'] !== 2) return event
+  const { version: _version, ...descriptor } = data
+  return { ...event, data: { ...descriptor, version: 3 } }
 }
 
 function replacementStart(event: SessionFormatEvent): number | undefined {

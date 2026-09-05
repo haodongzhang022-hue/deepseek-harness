@@ -40,7 +40,7 @@ const migratedV1 = sessionFormatV0ToV1.migrate(decodedV0)
 
 Alpha 迁移边会拒绝冻结清单之外的所有事件类型，包括带有 `ignorable: true` 标记的未知事件。它也会拒绝意外的 payload 成员。`tool/result.meta` 与嵌套 PTC `arguments` 是显式的不透明 JSON 字段；迁移会原样保留它们，不把其中的数字解释为 Session 序号。未知 content-block `type`、message-source `kind`、assistant finish-reason `kind` 与 `turn/end` reason `kind` 分支保持 owner-opaque JSON，已知分支则接受结构校验。
 
-有限的历史规范化会把 `steering/message` 转换为 `user/message`、移除 `turn/start.trigger`、转换已停用的 `turn/end` reason、添加当前消息包装层与确定性的旧消息 id，并移除已停用且重复的 `request/header.header.messagePrefix`。已停用的 `request/header-delta`、`mode/set` 和 `request/header` fallback reason 会使迁移失败。除此之外，任何事件、引用、来源或 payload 事实都不得改变。
+有限的历史规范化会把 `steering/message` 转换为 `user/message`、移除 `turn/start.trigger`、转换已停用的 `turn/end` reason、添加当前消息包装层与确定性的旧消息 id，并移除已停用且重复的 `request/header.header.messagePrefix`。`assistant/chunk` finish 与模型消息来源携带的旧版扁平适配器 replay 信封会被拆分为已发布的 `{ response, blocks }` 结构，以 version 2 记录的已发布 subagent 描述符会被提升为 version 3。已停用的 `request/header-delta`、`mode/set` 和 `request/header` fallback reason 会使迁移失败。除此之外，任何事件、引用、来源或 payload 事实都不得改变。
 
 -----
 

@@ -40,7 +40,7 @@ const migratedV1 = sessionFormatV0ToV1.migrate(decodedV0)
 
 The alpha edge refuses every event type outside its frozen inventory, including an unknown event marked `ignorable: true`. It also refuses unexpected payload members. `tool/result.meta` and nested PTC `arguments` remain explicit opaque JSON fields and are preserved without Session-sequence interpretation. Unknown content-block `type`, message-source `kind`, assistant finish-reason `kind`, and `turn/end` reason `kind` arms remain owner-opaque JSON while their known arms receive structural validation.
 
-The bounded historical normalizers convert `steering/message` to `user/message`, remove `turn/start.trigger`, convert retired `turn/end` reasons, add the current message wrappers and deterministic legacy message ids, and remove the obsolete `request/header.header.messagePrefix` duplicate. Retired `request/header-delta`, `mode/set`, and the `request/header` fallback reason refuse migration. No other event, reference, source, or payload fact may change.
+The bounded historical normalizers convert `steering/message` to `user/message`, remove `turn/start.trigger`, convert retired `turn/end` reasons, add the current message wrappers and deterministic legacy message ids, and remove the obsolete `request/header.header.messagePrefix` duplicate. Legacy flat adapter replay envelopes carried by `assistant/chunk` finishes and model message sources are split into the released `{ response, blocks }` shape, and released subagent descriptors recorded at version 2 are promoted to version 3. Retired `request/header-delta`, `mode/set`, and the `request/header` fallback reason refuse migration. No other event, reference, source, or payload fact may change.
 
 -----
 
