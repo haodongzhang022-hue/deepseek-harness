@@ -158,7 +158,7 @@ describe('signal bus routing', () => {
     await new Promise(r => setTimeout(r, 80))
     const before = bus.runningSnapshot(realStart + 80)
     expect(before.map(r => r.trigger_id)).toEqual(['t-exec'])
-    expect(before[0].elapsedMs).toBeGreaterThanOrEqual(0)
+    expect(before[0]!.elapsedMs).toBeGreaterThanOrEqual(0)
     await new Promise(r => setTimeout(r, 450))
     expect(bus.runningSnapshot(Date.now() + 600)).toEqual([])
   })

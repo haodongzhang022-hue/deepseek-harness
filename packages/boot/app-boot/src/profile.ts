@@ -131,7 +131,7 @@ export interface Profile {
    * refused (not whitelisted, unresolved, not a dsh bundle, or broken). The
    * system still boots without them.
    */
-  quarantined: QuarantinedBundle[]
+  quarantined?: QuarantinedBundle[]
   /** Absolute path of the profile's own patch file. */
   patchPath: string
   /** The profile's own patches; empty when the file is absent. */

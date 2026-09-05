@@ -734,7 +734,7 @@ export async function assertEntriesActivated(
   ctx: Context, binName: string, options: { onQuarantine?: (message: string) => void } = {},
 ): Promise<void> {
   const onQuarantine = options.onQuarantine
-  assertEntriesLoaded(ctx, binName, { onQuarantine })
+  assertEntriesLoaded(ctx, binName, onQuarantine === undefined ? {} : { onQuarantine })
   const coreFailures: string[] = []
   const rejectionReasons: unknown[] = []
   const quarantine = (name: string): void => {

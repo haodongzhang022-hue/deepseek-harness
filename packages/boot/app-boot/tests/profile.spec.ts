@@ -291,8 +291,8 @@ describe('loadProfile', () => {
     })
     // The non-bundle is refused, never mounted; the valid layer still boots.
     expect(layers.map(layer => layer.packageName)).toEqual(['good-bundle'])
-    expect(quarantined.map(entry => entry.packageName)).toEqual(['not-a-bundle'])
-    expect(quarantined[0]?.message).toContain('no dsh.bundle')
+    expect(quarantined!.map(entry => entry.packageName)).toEqual(['not-a-bundle'])
+    expect(quarantined![0]?.message).toContain('no dsh.bundle')
     expect(warnings.join('\n')).toContain('"not-a-bundle"')
   })
 
@@ -309,8 +309,8 @@ describe('loadProfile', () => {
     writeProfileManifest(dir, manifest)
     const { layers, quarantined } = loadProfile('t', 'demo', anchor, home)
     expect(layers.map(layer => layer.packageName)).toEqual(['admitted'])
-    expect(quarantined.map(entry => entry.packageName)).toEqual(['not-admitted'])
-    expect(quarantined[0]?.message).toContain('whitelist')
+    expect(quarantined!.map(entry => entry.packageName)).toEqual(['not-admitted'])
+    expect(quarantined![0]?.message).toContain('whitelist')
   })
 
   it('quarantines a whitelisted bundle whose patch layer fails to load', () => {
@@ -323,8 +323,8 @@ describe('loadProfile', () => {
     writeProfileManifest(dir, manifest)
     const { layers, quarantined } = loadProfile('t', 'demo', anchor, home)
     expect(layers).toEqual([])
-    expect(quarantined.map(entry => entry.packageName)).toEqual(['broken-patch'])
-    expect(quarantined[0]?.message).toContain('patch layer')
+    expect(quarantined!.map(entry => entry.packageName)).toEqual(['broken-patch'])
+    expect(quarantined![0]?.message).toContain('patch layer')
   })
 })
 

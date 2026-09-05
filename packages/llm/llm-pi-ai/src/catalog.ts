@@ -165,7 +165,6 @@ export type PiAiChatTemplateVar = Extract<ChatTemplateKwargValue, { $var: string
 const CHAT_TEMPLATE_VAR_GATE: Record<PiAiChatTemplateVar, true> = {
   'thinking.enabled': true,
   'thinking.effort': true,
-  'thinking.budget': true,
 }
 
 /** The request-state placeholders a profile may name. */
@@ -208,8 +207,8 @@ export function catalogProvider(provider: string): Provider | undefined {
  * @returns the catalog provider ids.
  */
 export function catalogProviderIds(): readonly string[] {
-  const ids = [...getBuiltinProviders()]
-  const seen = new Set(ids)
+  const ids: string[] = [...getBuiltinProviders()]
+  const seen = new Set<string>(ids)
   for (const [alias, source] of Object.entries(LEGACY_PROVIDER_ALIASES)) {
     if (seen.has(alias) || !seen.has(source)) continue
     seen.add(alias)
@@ -281,7 +280,6 @@ const COMPLETIONS_COMPAT_GATE = {
   sendSessionAffinityHeaders: 'withhold',
   deferredToolsMode: 'withhold',
   sessionAffinityFormat: 'withhold',
-  thinkingTokenBudgetField: 'withhold',
 } as const satisfies Record<keyof OpenAICompletionsCompat, CompatDisposition>
 
 /** Disposition of every `OpenAIResponsesCompat` field; a drift gate like the one above. */
@@ -307,7 +305,6 @@ const ANTHROPIC_COMPAT_GATE = {
   supportsStrictTools: 'offer',
   sendSessionAffinityHeaders: 'withhold',
   supportsToolReferences: 'withhold',
-  allowedFallbackModels: 'withhold',
 } as const satisfies Record<keyof AnthropicMessagesCompat, CompatDisposition>
 
 /** Disposition of every `BedrockCompat` field; a drift gate like the one above. */

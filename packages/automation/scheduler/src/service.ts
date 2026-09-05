@@ -20,9 +20,9 @@ declare module '@deepseek-ai/cordis' {
 
 /** The most recent clock-signal emission, for freshness watchdogs and panels. */
 export interface ClockState {
-  readonly pulseId: string
-  readonly emittedAt: string
-  readonly channels: readonly string[]
+  pulseId: string
+  emittedAt: string
+  channels: readonly string[]
 }
 
 /** One in-flight dispatch as the panel shows it. */
