@@ -1,7 +1,8 @@
 /**
  * @dsh-external/dsh-automation-console — client entry.
- * Registers one 'conversation.view' tab (⚙️ 控制台) rendering the React
- * ConsolePanel. 构建：npm run build:client（tsdown → lib/client.js）。
+ * Registers one 'conversation.view' tab (📅 自动化日历 — the automation
+ * management surface: trigger calendar, frequency groups, ops, gates) rendering
+ * the React ConsolePanel. 构建：npm run build:client（tsdown → lib/client.js）。
  * @module dsh-automation-console/client
  */
 
@@ -25,8 +26,8 @@ export function apply(ctx: ClientContext): void {
     slots.register({
       name: 'conversation.view',
       id: 'automation-console',
-      order: 12,
-      label: () => '⚙️ 控制台',
+      order: 11,
+      label: () => '📅 自动化日历',
     }, ConsolePanel),
   ), '@dsh-external/dsh-automation-console: panel')
 }

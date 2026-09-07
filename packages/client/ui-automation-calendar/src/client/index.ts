@@ -69,11 +69,12 @@ export function apply(ctx: Context): void {
     navigateToSession: (sessionId: string) => void ctx.sessions.open(sessionId as SessionId),
   })
 
-  // Primary mount: the conversation view tab (日历页).
+  // Primary mount: the conversation view tab (会话轮次 — the session turn
+  // calendar moved behind the automation console's 自动化日历 entry).
   ctx.slots.inject('conversation.view', () => ctx.slots.register({
     name: 'conversation.view',
     id: 'automation-calendar',
-    order: 11,
+    order: 12,
     locale: CALENDAR_LOCALE_NS,
     label: () => t('view.calendar'),
     inject: injectCalendar,

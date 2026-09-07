@@ -47,7 +47,7 @@ export type CalendarKey =
   | 'empty.description'
 
 export const calendarZh: Record<CalendarKey, string> = {
-  'view.calendar': '自动化日历',
+  'view.calendar': '会话轮次',
   'action.refresh': '刷新',
   'action.openSession': '打开会话',
   'granularity.label': '粒度',
@@ -78,7 +78,7 @@ export const calendarZh: Record<CalendarKey, string> = {
 }
 
 export const calendarEn: Record<CalendarKey, string> = {
-  'view.calendar': 'Automation Calendar',
+  'view.calendar': 'Session Turns',
   'action.refresh': 'Refresh',
   'action.openSession': 'Open Session',
   'granularity.label': 'Granularity',
