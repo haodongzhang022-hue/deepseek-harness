@@ -176,5 +176,14 @@ peer=对侧），报告互比产生"对比"。理由：
 双侧 30min 触发器在役：dev `dsh-home/.../triggers/alignment-check.json` +
 prod `dsh-prod-home/.../triggers/alignment-check.json`（均 `--role` 显式 + `--report-only` 只读）。
 
+### 瘦身专项交接 + 机制交付入库（2026-09-08 04:30）
+
+**专项会话已建**：`session-4033bd53-6bc4-4c54-9440-9789fa67526f`（git 历史瘦身，任务书+接力卡号已注入，GUI 可见）
+**交接卡**：`RL-000022`（open → 新会话接手 → done；契约=方案/备份/force-push 协调/59 正当修改保留验证/H 面复核）
+**归口原则入手册**：8088 发现开发链路问题 → 只报告回投接力卡，生产环境不执行历史重写/force-push；
+手册已同步 `dsh-prod-src/data/release_control/HANDOVER_8088.md`。
+**机制交付已正式提交**：dev-repo `dce9aa9ddb`（引擎 v2 + 触发器模板×2 + 交接手册 + spawn 脚本 + 台账 + .gitignore），
+对齐校验/交接物不再游离于版本控制；40 分钟后 8088 侧 H 面将随新引擎继续监测瘦身效果（对象库体积回落可自动验证）。
+
 ---
 *上一版第 1-6 节为 0903 首审结论；第 7 节起为 0908 对齐机制运行后的持续对账记录。*
