@@ -137,6 +137,9 @@ export function validate(patch: TriggerPatch): void {
   if (match.slot_weekday !== undefined && (!Number.isInteger(match.slot_weekday) || match.slot_weekday < 0 || match.slot_weekday > 6)) {
     throw new TriggerValidationError(`trigger '${patch.trigger_id}': slot_weekday must be an integer 0..6 (0=Sunday)`)
   }
+  if (match.slot_dom !== undefined && (!Number.isInteger(match.slot_dom) || match.slot_dom < 1 || match.slot_dom > 31)) {
+    throw new TriggerValidationError(`trigger '${patch.trigger_id}': slot_dom must be an integer 1..31`)
+  }
   const action = patch.action
   if (action === undefined || typeof action !== 'object' || !ACTION_KINDS.has(action.kind)) {
     throw new TriggerValidationError(`trigger '${patch.trigger_id}': missing or unknown action.kind (exec|http|dsh-prompt)`)

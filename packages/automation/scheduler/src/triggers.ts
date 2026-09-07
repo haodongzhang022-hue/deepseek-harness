@@ -45,6 +45,8 @@ export interface Trigger {
     readonly slot_h_mod?: number
     /** Local-timezone weekday gate (0=Sunday..6=Saturday), combined with the other filters. */
     readonly slot_weekday?: number
+    /** Local-timezone day-of-month gate (1..31), combined with the other filters — the monthly cadence unit. */
+    readonly slot_dom?: number
   }
   /** Local-timezone offset in minutes east of UTC for atLocal matching (east positive). @default DEFAULT_TZ_OFFSET_MIN */
   readonly tzOffsetMin?: number
@@ -72,6 +74,7 @@ export function matches(pulse: Pick<ClockPulse, 'channel' | 'slot'>, t: Trigger)
   if (t.match.slot_m_mod !== undefined && pulse.slot.m % t.match.slot_m_mod !== 0) return false
   if (t.match.slot_h_mod !== undefined && pulse.slot.h % t.match.slot_h_mod !== 0) return false
   if (t.match.slot_weekday !== undefined && localWeekday(pulse.slot, t.tzOffsetMin) !== t.match.slot_weekday) return false
+  if (t.match.slot_dom !== undefined && localDom(pulse.slot, t.tzOffsetMin) !== t.match.slot_dom) return false
   return true
 }
 
@@ -80,6 +83,13 @@ function localWeekday(slot: ClockPulse['slot'], tzOffsetMin: number | undefined)
   const offsetMin = tzOffsetMin ?? DEFAULT_TZ_OFFSET_MIN
   const utcMs = Date.UTC(slot.y, slot.mo - 1, slot.d, slot.h, slot.m)
   return new Date(utcMs + offsetMin * 60_000).getUTCDay()
+}
+
+/** Local-timezone day-of-month (1..31) of one UTC slot, using the trigger offset. */
+function localDom(slot: ClockPulse['slot'], tzOffsetMin: number | undefined): number {
+  const offsetMin = tzOffsetMin ?? DEFAULT_TZ_OFFSET_MIN
+  const utcMs = Date.UTC(slot.y, slot.mo - 1, slot.d, slot.h, slot.m)
+  return new Date(utcMs + offsetMin * 60_000).getUTCDate()
 }
 
 /** Euclidean-ish modulo that yields non-negative results for negative dividends. */

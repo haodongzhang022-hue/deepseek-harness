@@ -189,7 +189,7 @@ interface BusTrigger {
   trigger_id: string
   owner_session: string
   enabled?: boolean
-  match: { channel: string; atLocal?: { h: number; m: number }; slot_m_mod?: number; slot_h_mod?: number; slot_weekday?: number }
+  match: { channel: string; atLocal?: { h: number; m: number }; slot_m_mod?: number; slot_h_mod?: number; slot_weekday?: number; slot_dom?: number }
   tzOffsetMin?: number
   action: { kind: string; cmd?: string[]; url?: string; method?: string; session_id?: string }
 }
@@ -218,6 +218,10 @@ function matchesPulse(pulseId: string, t: BusTrigger): boolean {
     const utcMs = Date.UTC(slot.y, slot.mo - 1, slot.d, slot.h, slot.m)
     const localWeekday = new Date(utcMs + offsetMin * 60_000).getUTCDay()
     if (localWeekday !== t.match.slot_weekday) return false
+  }
+  if (t.match.slot_dom !== undefined) {
+    const utcMs = Date.UTC(slot.y, slot.mo - 1, slot.d, slot.h, slot.m)
+    if (new Date(utcMs + offsetMin * 60_000).getUTCDate() !== t.match.slot_dom) return false
   }
   return true
 }
@@ -278,6 +282,7 @@ function triggerLevel(t: BusTrigger): SeriesLevel {
   if (m.channel === 'day') return '1d'
   if (m.channel === 'hour') return '1h'
   if (m.atLocal !== undefined) return '1d'
+  if (m.slot_h_mod === 1) return '1h'
   if (m.slot_m_mod === 5) return '5m'
   if (m.slot_m_mod === 15) return '15m'
   if (m.slot_m_mod === 30) return '30m'
@@ -287,16 +292,22 @@ function triggerLevel(t: BusTrigger): SeriesLevel {
 /** Human-readable cadence for one trigger's match rule. */
 function describeMatch(t: BusTrigger): string {
   const parts: string[] = []
-  if (t.match.atLocal !== undefined) {
-    const hh = String(t.match.atLocal.h).padStart(2, '0')
-    const mm = String(t.match.atLocal.m).padStart(2, '0')
-    parts.push((t.match.channel === 'day' ? '每天' : '时刻') + ' @' + hh + ':' + mm + ' 本地')
-  } else if (t.match.channel === 'day') parts.push('每天')
+  const at = t.match.atLocal
+  if (at !== undefined) {
+    const hh = String(at.h).padStart(2, '0')
+    const mm = String(at.m).padStart(2, '0')
+    const stamp = ' @' + hh + ':' + mm + ' 本地'
+    if (t.match.slot_weekday !== undefined) parts.push('每周' + '日一二三四五六'.charAt(t.match.slot_weekday) + stamp)
+    else if (t.match.slot_dom !== undefined) parts.push('每月第' + String(t.match.slot_dom) + '日' + stamp)
+    else parts.push('每天' + stamp)
+  } else if (t.match.slot_m_mod !== undefined) parts.push('每' + String(t.match.slot_m_mod) + '分钟')
+  else if (t.match.slot_h_mod !== undefined) parts.push('每' + String(t.match.slot_h_mod) + '小时')
+  else if (t.match.channel === 'day') parts.push('每天')
   else if (t.match.channel === 'hour') parts.push('每小时')
-  else if (t.match.slot_m_mod !== undefined) parts.push('每' + String(t.match.slot_m_mod) + '分钟')
   else parts.push(String(t.match.channel))
-  if (t.match.slot_h_mod !== undefined) parts.push('(h%' + String(t.match.slot_h_mod) + ')')
-  if (t.match.slot_weekday !== undefined) parts.push('(周' + '日一二三四五六'.charAt(t.match.slot_weekday) + ')')
+  if (at === undefined && t.match.slot_h_mod !== undefined && t.match.slot_m_mod !== undefined) parts.push('(h%' + String(t.match.slot_h_mod) + ')')
+  if (at === undefined && t.match.slot_weekday !== undefined) parts.push('(周' + '日一二三四五六'.charAt(t.match.slot_weekday) + ')')
+  if (at === undefined && t.match.slot_dom !== undefined) parts.push('(每月第' + String(t.match.slot_dom) + '日)')
   return parts.join(' ')
 }
 
