@@ -273,7 +273,7 @@ describe('released Session format v0 to v1', () => {
 
     const migrated = sessionFormatV0ToV1.migrate(releasedV0SessionFormatCodec.decodeArtifact(header, rows))
 
-    const chunk = migrated.events[2]!.data['chunk'] as { replayState: unknown }
+    const chunk = (migrated.events[2]!.data as Record<string, unknown>)['chunk'] as { replayState: unknown }
     const source = (migrated.events[3]!.data as { message: { source: { replayState: unknown } } }).message.source
     expect(chunk.replayState).toEqual(splitEnvelope)
     expect(source.replayState).toEqual(splitEnvelope)
