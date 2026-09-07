@@ -58,8 +58,8 @@ const guardSource = (tool: string, count: number) => ({
 })
 
 describe('threshold escalation', () => {
-  it('reminds gently at the first default threshold (3) and in detail at the second (5)', async () => {
-    const ctx = await harness()
+  it('reminds gently at the first threshold (3) and in detail at the second (5)', async () => {
+    const ctx = await harness({ thresholds: [3, 5] })
     const adapter = new MockAdapter([
       ...Array.from({ length: 5 }, (_, i) => toolCallResponse(`c${i}`, 'probe', { q: 'same' })),
       textResponse('done'),
@@ -121,7 +121,7 @@ describe('chain semantics', () => {
   })
 
   it('a different tracked call resets the chain', async () => {
-    const ctx = await harness()
+    const ctx = await harness({ thresholds: [3] })
     const adapter = new MockAdapter([
       toolCallResponse('c1', 'probe', { q: 1 }),
       toolCallResponse('c2', 'probe', { q: 1 }),
@@ -140,7 +140,7 @@ describe('chain semantics', () => {
   })
 
   it('excluded calls are transparent: they neither count nor reset', async () => {
-    const ctx = await harness({ exclude: ['other'] })
+    const ctx = await harness({ exclude: ['other'], thresholds: [3] })
     const adapter = new MockAdapter([
       toolCallResponse('c1', 'probe', { q: 1 }),
       toolCallResponse('c2', 'other', {}), // excluded → invisible to the chain
@@ -160,7 +160,7 @@ describe('chain semantics', () => {
   })
 
   it('include patterns track only matching tools (wildcard star)', async () => {
-    const ctx = await harness({ include: ['pro*'] })
+    const ctx = await harness({ include: ['pro*'], thresholds: [3] })
     const adapter = new MockAdapter([
       toolCallResponse('c1', 'other', {}),
       toolCallResponse('c2', 'other', {}),
@@ -181,7 +181,7 @@ describe('chain semantics', () => {
   })
 
   it('escapes regex metacharacters in patterns (a dot matches only a literal dot)', async () => {
-    const ctx = await harness({ exclude: ['pr.be'] }) // would match 'probe' as a regex; must not as a wildcard
+    const ctx = await harness({ exclude: ['pr.be'], thresholds: [3] }) // would match 'probe' as a regex; must not as a wildcard
     const adapter = new MockAdapter([
       ...Array.from({ length: 3 }, (_, i) => toolCallResponse(`c${i}`, 'probe', {})),
       textResponse('done'),
@@ -195,7 +195,7 @@ describe('chain semantics', () => {
   })
 
   it('canonicalization ignores property order, deeply', async () => {
-    const ctx = await harness()
+    const ctx = await harness({ thresholds: [3] })
     const adapter = new MockAdapter([
       toolCallResponse('c1', 'probe', { a: 1, nested: { x: [1, 2], y: null } }),
       toolCallResponse('c2', 'probe', { nested: { y: null, x: [1, 2] }, a: 1 }),
@@ -211,7 +211,7 @@ describe('chain semantics', () => {
   })
 
   it('keys chains per agent: one agent repeating never trips another', async () => {
-    const ctx = await harness()
+    const ctx = await harness({ thresholds: [3] })
     ctx.llm.registerAdapter(['mock-a'], new MockAdapter([
       toolCallResponse('a1', 'probe', { q: 1 }),
       toolCallResponse('a2', 'probe', { q: 1 }),

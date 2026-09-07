@@ -1,0 +1,39 @@
+.bar {
+  display: flex;
+  gap: 24px;
+  margin: 8px 16px;
+  padding: 10px 16px;
+  border: 1px solid var(--dsw-border-color);
+  border-radius: 8px;
+  background: var(--dsw-bg-primary);
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.value {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--dsw-text-primary);
+}
+
+.running {
+  color: var(--dsw-text-primary);
+}
+
+.completed {
+  color: var(--dsw-text-secondary);
+}
+
+.failed {
+  color: var(--dsw-text-primary);
+}
+
+.name {
+  font-size: 11px;
+  color: var(--dsw-text-secondary);
+}

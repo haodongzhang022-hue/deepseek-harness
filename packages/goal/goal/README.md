@@ -38,7 +38,7 @@ Load the package with a composition entry; the only deployment choice is the def
 ```yaml
 - name: '@deepseek-ai/dsh-goal'
   config:
-    defaultMaxGoalRounds: 256
+    defaultMaxGoalRounds: 1024
 ```
 
 | Field | Default | Meaning |

@@ -1,0 +1,91 @@
+.calendarRoot {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 8px 16px 4px;
+}
+
+.title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--dsw-text-primary);
+}
+
+.icon {
+  font-size: 16px;
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.refreshButton {
+  border: 1px solid var(--dsw-border-color);
+  background: var(--dsw-bg-primary);
+  color: var(--dsw-text-primary);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 5px 10px;
+  border-radius: 6px;
+}
+
+.refreshButton:hover {
+  background: var(--dsw-bg-hover);
+}
+
+.mainContent {
+  flex: 1;
+  display: flex;
+  gap: 12px;
+  margin: 0 16px;
+  min-height: 0;
+}
+
+.gridArea {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.resourceArea {
+  flex-shrink: 0;
+  overflow-y: auto;
+}
+
+.emptyState {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--dsw-text-secondary);
+}
+
+.emptyIcon {
+  font-size: 40px;
+  opacity: 0.5;
+}
+
+.emptyTitle {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--dsw-text-primary);
+}
+
+.emptyDescription {
+  font-size: 12px;
+}

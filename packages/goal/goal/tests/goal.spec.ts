@@ -135,7 +135,7 @@ describe('GoalService creation and replay', () => {
     expect(() => ctx.goals.create(agent, {
       objective: 'x', maxGoalRounds: Number.MAX_SAFE_INTEGER + 1,
     })).toThrow(GoalError)
-    expect(ctx.goals.create(agent, { objective: 'x' }).maxGoalRounds).toBe(256)
+    expect(ctx.goals.create(agent, { objective: 'x' }).maxGoalRounds).toBe(1024)
   })
 
   it('also resolves the default when constructed directly without Cordis config normalization', async () => {
@@ -147,7 +147,7 @@ describe('GoalService creation and replay', () => {
     const goals = new GoalService(ctx)
     await new Promise(resolve => setImmediate(resolve))
     expect(goals.create(stub.agent, { objective: 'direct' })).toMatchObject({
-      objective: 'direct', maxGoalRounds: 256,
+      objective: 'direct', maxGoalRounds: 1024,
     })
   })
 

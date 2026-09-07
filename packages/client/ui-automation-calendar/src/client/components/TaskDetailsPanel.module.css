@@ -1,0 +1,108 @@
+.panel {
+  width: 280px;
+  padding: 14px;
+  border: 1px solid var(--dsw-border-color);
+  border-radius: 8px;
+  background: var(--dsw-bg-primary);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.title {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--dsw-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.closeButton {
+  border: none;
+  background: transparent;
+  color: var(--dsw-text-secondary);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.closeButton:hover {
+  background: var(--dsw-bg-hover);
+  color: var(--dsw-text-primary);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sectionTitle {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--dsw-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.factRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.factName {
+  color: var(--dsw-text-secondary);
+  flex-shrink: 0;
+}
+
+.factValue {
+  color: var(--dsw-text-primary);
+  text-align: right;
+  word-break: break-all;
+}
+
+.errorMessage {
+  font-size: 11px;
+  color: var(--dsw-text-primary);
+  background: var(--dsw-bg-hover);
+  border-radius: 4px;
+  padding: 6px 8px;
+  word-break: break-word;
+}
+
+.suggestion {
+  font-size: 11px;
+  color: var(--dsw-text-secondary);
+}
+
+.autoActions {
+  font-size: 11px;
+  color: var(--dsw-text-secondary);
+  font-style: italic;
+}
+
+.openButton {
+  border: none;
+  border-radius: 6px;
+  background: var(--dsw-bg-active);
+  color: var(--dsw-text-primary);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 8px 12px;
+}
+
+.openButton:hover {
+  filter: brightness(1.15);
+}

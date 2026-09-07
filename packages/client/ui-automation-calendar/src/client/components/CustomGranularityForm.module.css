@@ -1,0 +1,106 @@
+.form {
+  border-top: 1px solid var(--dsw-border-color);
+  padding: 8px 12px;
+}
+
+.formTitle {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--dsw-text-secondary);
+  margin-bottom: 6px;
+}
+
+.row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.nameInput,
+.valueInput {
+  flex: 1;
+  padding: 5px 8px;
+  border: 1px solid var(--dsw-border-color);
+  border-radius: 4px;
+  background: var(--dsw-bg-primary);
+  color: var(--dsw-text-primary);
+  font-size: 12px;
+  min-width: 0;
+}
+
+.valueInput {
+  flex: 0 0 64px;
+}
+
+.unitSelect {
+  padding: 5px 4px;
+  border: 1px solid var(--dsw-border-color);
+  border-radius: 4px;
+  background: var(--dsw-bg-primary);
+  color: var(--dsw-text-primary);
+  font-size: 12px;
+}
+
+.createButton {
+  padding: 5px 10px;
+  border: none;
+  border-radius: 4px;
+  background: #7C4DFF;
+  color: white;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.createButton:hover {
+  filter: brightness(1.15);
+}
+
+.error {
+  color: #F44336;
+  font-size: 11px;
+  margin-bottom: 6px;
+}
+
+.existing {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+}
+
+.existingRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 4px 6px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--dsw-text-primary);
+  cursor: pointer;
+  font-size: 12px;
+  text-align: left;
+}
+
+.existingRow:hover {
+  background: var(--dsw-bg-hover);
+}
+
+.interval {
+  margin-left: auto;
+  color: var(--dsw-text-secondary);
+  font-size: 11px;
+}
+
+.removeButton {
+  cursor: pointer;
+  color: var(--dsw-text-secondary);
+  padding: 0 4px;
+  border-radius: 3px;
+}
+
+.removeButton:hover {
+  color: #F44336;
+  background: var(--dsw-bg-hover);
+}

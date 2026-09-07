@@ -90,7 +90,7 @@ export interface Config {
     deny?: string[]
   }
   /**
-   * Maximum child depth: a non-negative safe integer (default `3`; `0` forbids
+   * Maximum child depth: a non-negative safe integer (default `12`; `0` forbids
    * delegation entirely), or `'provider-managed'` to send no cap. A numeric cap
    * requires the provider's `depthLimit` capability (mount fails loud
    * otherwise). The provider checks the calling agent's current depth at every
@@ -125,7 +125,7 @@ export const Config: z<Config> = z.object({
     allow: z.array(z.string()).default(undefined as unknown as string[]),
     deny: z.array(z.string()).default(undefined as unknown as string[]),
   }).default(undefined as unknown as { allow: string[]; deny: string[] }),
-  maxDepth: z.union([z.natural().max(Number.MAX_SAFE_INTEGER), z.const('provider-managed' as const)]).default(3),
+  maxDepth: z.union([z.natural().max(Number.MAX_SAFE_INTEGER), z.const('provider-managed' as const)]).default(12),
 })
 
 /** Render text blocks from the canonical JSON block array without trusting arbitrary values. */

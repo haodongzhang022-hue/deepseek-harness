@@ -1,0 +1,52 @@
+.selector {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.stepButton {
+  border: 1px solid var(--dsw-border-color);
+  background: var(--dsw-bg-primary);
+  color: var(--dsw-text-secondary);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.stepButton:hover:not(:disabled) {
+  color: var(--dsw-text-primary);
+  background: var(--dsw-bg-hover);
+}
+
+.stepButton:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.presets {
+  display: flex;
+  gap: 2px;
+}
+
+.preset {
+  border: none;
+  background: transparent;
+  color: var(--dsw-text-secondary);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.preset:hover {
+  background: var(--dsw-bg-hover);
+  color: var(--dsw-text-primary);
+}
+
+.preset.active {
+  background: var(--dsw-bg-active);
+  color: var(--dsw-text-primary);
+  font-weight: 600;
+}
