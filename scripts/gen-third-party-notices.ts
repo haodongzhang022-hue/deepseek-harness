@@ -68,6 +68,9 @@ const OVERRIDES: Record<string, { license?: string; repo?: string }> = {
   // Rust workspaces publishing npm bins without `license` in package.json.
   'oxlint': { license: 'MIT', repo: 'https://github.com/oxc-project/oxc' },
   'oxlint-tsgolint': { license: 'MIT', repo: 'https://github.com/oxc-project/tsgolint' },
+  // lancedb (plugin-aggregator optionalDependency): store metadata carries
+  // the non-standard `license: Apache 2.0` and no repository field.
+  '@lancedb/lancedb': { license: 'Apache-2.0', repo: 'https://github.com/lancedb/lancedb' },
   // `license: SEE LICENSE IN LICENSE`: the servers repo is mid MIT→Apache-2.0
   // relicensing, so the effective terms are per-contribution.
   '@modelcontextprotocol/server-everything': { license: 'MIT / Apache-2.0', repo: 'https://github.com/modelcontextprotocol/servers' },

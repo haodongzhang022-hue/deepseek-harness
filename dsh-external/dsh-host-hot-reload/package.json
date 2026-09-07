@@ -1,0 +1,17 @@
+{
+  "name": "@dsh-external/dsh-host-hot-reload",
+  "version": "0.1.0",
+  "description": "Callable host-plugin hot reload: reload file:// source plugins in the running DSH instance without restart",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "license": "BSD-3-Clause",
+  "peerDependencies": {
+    "@deepseek-ai/cordis": ">=4.0.0-rc <5",
+    "@deepseek-ai/dsh-tools": ">=0.0.1-rc <2"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0"
+  }
+}
