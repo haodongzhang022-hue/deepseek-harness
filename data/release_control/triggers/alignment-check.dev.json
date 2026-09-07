@@ -1,0 +1,27 @@
+{
+  "trigger_id": "alignment-check",
+  "owner_session": "session-2bb040a07b9a",
+  "match": {
+    "channel": "minute",
+    "slot_m_mod": 30
+  },
+  "action": {
+    "kind": "exec",
+    "cmd": [
+      "D:/1ruanjian/1.kaifa/conda251011/envs/bian/python.exe",
+      "E:/1shuju/1gitgengxin/deepseek-harness/scripts/alignment_check.py",
+      "--role",
+      "dev",
+      "--report-only"
+    ],
+    "cwd": "E:/1shuju/1gitgengxin/deepseek-harness",
+    "timeout_s": 300
+  },
+  "overlap": "skip",
+  "dedup_key": "alignment-check:{pulse_id}",
+  "failure_policy": {
+    "consecutive_fail_notify": 3,
+    "notify_transport": "dsh-session.prompt",
+    "notify_target": "session-2bb040a07b9a"
+  }
+}

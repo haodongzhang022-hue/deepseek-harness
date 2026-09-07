@@ -41,3 +41,7 @@ apps/web/dist/
 worktrees/
 .agents/worktrees/
 .typert-*/
+
+# 对齐校验引擎输出 (scripts/alignment_check.py 生成)
+data/release_control/ALIGNMENT_REPORT.md
+data/release_control/ALIGNMENT_STATE.json

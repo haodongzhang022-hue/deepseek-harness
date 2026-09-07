@@ -68,3 +68,113 @@
 
 - 管道审计/监控哨兵会话：session_ID 待人工补充（GUI URL 为准），用途=3080 开发环境管道体检
 - lane 8011/8012/8009 等历史注册：全部过期，重新注册时**必须使用完整 session-UUID**
+
+## 7. 对齐校验机制 v1（2026-09-08 上线）
+
+> 目标：校验"开发→提PR→门禁→生产"链条的缺漏（防止提 PR 没提好/漏提/漏收口），
+> 权威数据源 = omni-meta queue.json + autopilot_state.json + 追踪器 router-*.json + 双实例目录。
+
+**引擎**：`scripts/alignment_check.py`（本仓，stdlib 无依赖，只读审计；`--fix-ledger` 带备份回写追踪器终态）
+**报告**：`data/release_control/ALIGNMENT_REPORT.md`（人类可读）+ `ALIGNMENT_STATE.json`（机器可读，含缺口清单）
+**调度**：`E:/1shuju/dsh-home/data/automation/signals/triggers/alignment-check.json`，每 30 分钟 `--report-only` 跑一次落盘
+**手动**：`python scripts/alignment_check.py`；清陈账：`python scripts/alignment_check.py --fix-ledger`
+
+**校验面**：A 队列 vs 追踪器对账｜B 在途/needs_human 遗留｜C 开发未提交（本仓+omni-meta）｜D 生产源/preset 漂移｜E 服务存活。
+
+### 首轮结论（2026-09-08 00:49，66 项缺口；修复陈账前 98 项）
+
+| 类 | 结论 |
+|---|---|
+| A 追踪器 | 32 行全部陈账回写（6 项 testing/queued 实际早已 closed 并推送 8028；26 项 rejected 实际 archived）。`--fix-ledger` 已修 + 备份 `router-*.bak-align-20260908-004921` |
+| B 在途 | 队列 0 在途；9 项 needs_human 全部被 closed 替代项覆盖，无遗留；**但唤醒兜底未配置**（OMNI_SIGNAL_* 缺失，9 项驳回从未送达源会话）→ 待办 3 |
+| C 开发未提交 | omni-meta **17 个源文件**未提交（含 release_control/queue.py、scripts/sync_agent_preset.py、dashboard_8008/{api/xlink.py,core/orders.py,frontend/index.html}、trading/stages.py、xlink/factor_features.py 等）+ 91 未跟踪源 + 68 产物；分支领先 main 380 提交；本仓未跟踪 dsh-secretary、dsh-git-auto-update、alignment 引擎 |
+| D 生产未同步 | dsh-prod-src 机制目录落后 1.5–9.3 天（release_control/review-guardrail/self-evolution/config/dsh-config 均 08-28）；**4 个 preset 仅开发侧**（architect-bridge-0906 / architect-cloudlocal-0906 / architect-local-0906 / secretary-mode）；git-auto-update 仅生产侧（豁免） |
+| E 服务 | 8008/8027/8028 OK（v3.19.1 三端对齐）；**8066 基线锚点 DOWN**（RC-000084/087 关闭理由含"8066 锚定"，需核对其是否仅发布期拉起）；8088 存活（401 鉴权态） |
+
+### 由对账发现的缺口处理记录（2026-09-08 02:10 完成首轮处置）
+
+| 项 | 处置 | 结果 |
+|---|---|---|
+| 追踪器 32 行陈账 | `--fix-ledger` 回写终态 + 备份 | 追踪板 0 分叉（已持续核对） |
+| omni-meta 未提交源 | 两个提交：`7c94870` fix(queue.py 租约回收 v3，14 测绿) + `adc8bc6` chore(deploy-state 版本化 26 文件，3218+/726-，已在 8008/8027/8028 运行) | 未提交源 17→2（残留=`sync_agent_preset.py`+测试：PTC 引导门禁对 creator-0907 红灯，**留给 owner 补引导段后自提**） |
+| 4 个 preset 缺失生产 | promote `architect-bridge-0906`/`architect-cloudlocal-0906`/`architect-local-0906`/`secretary-mode`（备份 `.agent-presets.bak-align-20260908-015936`） | 0 缺失；**8088 重启后生效**（待人工窗口） |
+| 8066 基线 | 核实：非 HTTP 服务，是 `.v3_baseline.json` 基准文件（v3_servers.py anchor/sync 管理） | 基准健康（01:36 锚定 ba01635480b3041d）；防空跑探针，检查已改为文件判据 |
+| OMNI_SIGNAL 兜底 | 核实：.env 无 OMNI_SIGNAL_*；主唤醒已修（RC-000077 cookie），中继打回卡通道在役 | 降到 low：可选配置第三通道，非阻塞 |
+| 生产源落后 9.3 天 | 9 目录备份 + `/E /XO` 增量同步（备份 `dsh-prod-src-backup-alignment-20260908-020326`） | 源漂移 8→0 |
+| 新发现（非本次处置） | 00:49 后 `packages/core/tools/src` 32 个文件被并发会话构建改写（mtime 02:03），及本仓 +1 提交（a1583b63 automation） | 归属其他会话，不代提交；下次对账若仍驻留再处理 |
+
+**新增已知豁免**：`git-auto-update` preset 仅生产侧（生产私有，豁免）；`experiments/` 在 omni-meta 被 gitignore（仓库策略）。
+
+**再次对账残余（02:03 快照，68 项）**：B-wake-channel low ×1；C-dev-untracked 3（含 alignment 引擎本身，待按区块提交）；C-dev-modified 32（并发构建，外部归属）；C-omni 未提交 2（PTC 门禁 owner 项）+ 未跟踪 93 源 68 产物（治理批次）；D preset 仅生产 1（豁免）；E 三端 v3.19.1 对齐 + 8088 鉴权存活。
+
+### 处置后剩余行动
+1. **[待窗口] 8088 重启**激活 4 个新 preset 与生产源同步（人工批准窗口）
+2. **[owner] PTC 引导门禁**：creator-0907 补 run_code 引导段后由 sync_agent_preset 提交方自提
+3. **[可选] IM 第三通道**：OMNI_SIGNAL_CHANNEL/OMNI_SIGNAL_WEBHOOK_URL（低）
+4. **[治理] omni-meta 未跟踪 93 源 + 68 产物**按区块入库/归档
+5. **[监控] packages/core/tools 并发改写**：下次对账观察，若驻留则归因到具体会话
+
+### v2 双侧部署 + 全流程追踪（2026-09-08 03:30 上线）
+
+**设计结论**：机制**双侧都部署**——同一引擎 `--role dev|prod` 角色对偶运行，
+权威源共享（omni-meta 队列/autopilot/omni git/端口 health），视角互换（self=各自仓库+home，
+peer=对侧），报告互比产生"对比"。理由：
+1. prod 侧自动化基础设施与 dev 完全一致（时钟+triggers 目录），双侧部署成本≈0；
+2. 角色对偶能发现单边看不到的缺漏（实证：prod 侧首跑即发现 8088 自身追踪器 23 行陈账，
+   dev 侧视角完全不可见）；
+3. 容错：dev 会话/进程不可用时 8088 仍独立出具审计；
+4. 生产侧定时走 `--report-only` 只读；`--fix-ledger` 需显式加参（仅写本侧 router JSON+备份）。
+
+**新增校验面**：
+- **F1 在途轨迹**：非终态 RC 的阶段事件时间线 + 停驻小时数
+- **F2 部署关联**：closed RC 的 artifact commit 是否在当前代码树（git 祖先判断，可解析才判）
+- **F3 驳回→重提闭环链**：显式引用双向查找（归档理由/标题/他项引用）+ 同名 closed 豁免 + demo 豁免
+- **F4 审核时间线**：8008/8027 通过率、提交→关闭天数最长 Top
+- **G 对侧对比**：读对侧 ALIGNMENT_STATE.json 输出缺口面差集；角色固有面（C-dev-*）预排除防互报
+
+**部署物**：
+- 引擎：`scripts/alignment_check.py`（本仓 + 已同步 `dsh-prod-src/scripts/`）
+- 触发器模板：`data/release_control/triggers/alignment-check.{dev,prod}.json`
+- 已部署：dev `dsh-home/data/automation/signals/triggers/alignment-check.json`（30min，role dev）
+  + prod `dsh-prod-home/data/automation/signals/triggers/alignment-check.json`（30min，role prod）
+- 双侧报告：dev `data/release_control/ALIGNMENT_REPORT.md` / prod `dsh-prod-src/data/release_control/ALIGNMENT_REPORT.md`
+
+**首轮双侧结果（03:27-03:30，两端各 2 轮收敛）**：
+| 面 | dev 视角 | prod 视角 |
+|---|---|---|
+| A 追踪器 | 0 陈账（此前已修） | **23 行陈账→已修**（备份 `router-*.bak-align-20260908-032429`，dev 看不见的缺口被 prod 抓住） |
+| F2 部署关联 | closed 70：在树 49 / 不在树 0 / 无法核验 21 | 同 |
+| F3 驳回重提 | 驳回 22 → 10 闭环链（028→073/068→072/070→071/074→078/080-083→084/085-086→087），孤驳 1（RC-000012） | 同 |
+| F4 审核 | 8008 74/93 通过，8027 70/73 通过；最长 submit→close 11.6d（RC-000001） | 同 |
+| G 对比 | only_self=C-dev-*（角色固有） | only_peer=C-dev-*（对侧固有）｜无分歧 gap |
+
+**从 F 面派生的长期动作**：
+1. 21 个 closed RC 无 commit 可核验（artifact_ref 写分支名/@latest）→ 建议提交规范要求 artifact_ref 带 commit
+2. RC-000012 孤驳 → 补归档备注或确认已被后续 API 工作覆盖
+3. 提交→关闭最长 11.6 天 → 结合 F1 停驻监控持续观察卡点
+
+### 9/5 git 事故存档 + H 面上线 + 8088 交接（2026-09-08 04:00）
+
+**事故**：`5120dd87c7`（09-05 14:22，"chore: WIP checkpoint before upstream dsh-0.1.3-alpha.1 merge"）
+一次提交 **30,674 文件 / 4,255,267 行**；该批正当修改约 59 文件（对照 `a584925285` 13 + `41301d0567` 8
+等后续修正提交），其余为工作树快照杂物。后果：dev-repo 对象库膨胀（size-pack ≈ **188.89 MiB**，
+`git count-objects -vH` 实测），PR 评审噪声大、diff 不可读。**工作树现已正常**（后续提交已修正），
+事故残留仅存在于 git 历史。
+
+**处置**：
+1. **H 面（git 卫生）上线**：引擎双仓扫描近 500 提交，>1000 文件的提交触发 high 告警 + 对象库体积报告。
+   实测持续命中：dev-repo `5120dd87c7`（30674）+ omni-meta `f5f7a06`（2867）/`4bfc876`（1243）即两仓现存大提交，
+   每 30 分钟监测，同类事故提交不再可能无声进入历史。
+2. **交接手册**：`data/release_control/HANDOVER_8088.md`（已同步 `dsh-prod-src/data/release_control/`），
+   含机制全貌/运行方式/双端边界/事故存档与 git 卫生纪律（提交前 `git diff --stat`；禁 WIP 一把梭；
+   artifact_ref 必须带 commit）/故障排查表。
+3. **历史清理建议**：filter-repo 瘦身列为独立专项（需全协作会话 force-push 配合 + 先备份仓库），
+   不阻断日常运行；H 面持续监测兜底。
+
+**双侧终态（04:00 快照）**：dev 51 缺口 / prod 41 缺口，G 对侧对比双侧无分歧 gap
+（仅角色固有面：dev 独有 C-dev-* 与本仓 H 大提交监测；prod 独有 dev 侧报告内容滞后一环的对照说明）。
+双侧 30min 触发器在役：dev `dsh-home/.../triggers/alignment-check.json` +
+prod `dsh-prod-home/.../triggers/alignment-check.json`（均 `--role` 显式 + `--report-only` 只读）。
+
+---
+*上一版第 1-6 节为 0903 首审结论；第 7 节起为 0908 对齐机制运行后的持续对账记录。*
