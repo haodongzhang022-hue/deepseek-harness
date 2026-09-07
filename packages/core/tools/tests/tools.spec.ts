@@ -55,6 +55,24 @@ describe('ToolRuntime', () => {
     expect(assembly.tools.map(t => t.name)).toEqual(['echo'])
   })
 
+  it('rejects tool names outside the provider-safe pattern at registration', async () => {
+    const ctx = await setup()
+    // Provider function-name APIs (OpenAI-compatible schemas included) accept
+    // only [a-zA-Z0-9_-]; an invalid name surfaces as an opaque upstream 400 on
+    // the first request, so the registry fails loud at registration instead.
+    for (const name of ['mindmap.expand', 'tool:web_search', 'has space', '中文名', '']) {
+      expect(() => ctx.tools.register({ ...echoTool, name }))
+        .toThrow(/must match \^\[a-zA-Z0-9_-\]\+\$/)
+    }
+  })
+
+  it('accepts provider-safe tool names including letters, digits, underscore, and dash', async () => {
+    const ctx = await setup()
+    for (const name of ['echo', 'with_underscore', 'with-dash', 'MCP123-abc_def']) {
+      expect(() => ctx.tools.register({ ...echoTool, name })).not.toThrow()
+    }
+  })
+
   it('schemas() drops host callbacks — they must never reach the model', async () => {
     const ctx = await setup()
     // Tool definitions contain output, finalization, execution, and presentation

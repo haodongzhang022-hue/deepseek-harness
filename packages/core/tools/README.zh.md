@@ -57,6 +57,8 @@ ctx.tools.register(defineTool({
 }))
 ```
 
+工具名必须匹配 `^[a-zA-Z0-9_-]+$`：各提供方的函数名 API（含 OpenAI 兼容 schema）会拒绝其他任何字符，并在请求时返回难以归因的上游错误，因此注册表在注册时就拒绝非法名字，而不是让第一个模型请求失败。
+
 统一 schema DSL 支持 `string`、`number`、`integer`、`boolean`、`null`、`array`、`object`、仅供作者使用的 `json` 与恰好匹配一个分支的 `oneOf`；`InferValue` 在 16 层容器内保留精确类型，之后加宽为 `JsonValue`。原始 JSON Schema（`JsonSchemaNode`）是与 subagent、工作流和 MCP 共享的协议级对应类型。
 
 ### 配置呈现模式

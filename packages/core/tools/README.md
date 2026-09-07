@@ -57,6 +57,8 @@ ctx.tools.register(defineTool({
 }))
 ```
 
+Tool names must match `^[a-zA-Z0-9_-]+$`: provider function-name APIs (OpenAI-compatible schemas included) reject any other character as an opaque upstream error, so the registry rejects an invalid name at registration instead of failing the first model request.
+
 The unified schema DSL supports `string`, `number`, `integer`, `boolean`, `null`, `array`, `object`, author-only `json`, and exact-one `oneOf`; `InferValue` preserves exact types through 16 container levels before widening to `JsonValue`. A raw JSON Schema (`JsonSchemaNode`) is the wire-level counterpart shared with subagents, workflows, and MCP.
 
 ### Configure the presentation mode

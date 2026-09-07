@@ -774,6 +774,15 @@ function resolveMaxParallelSubCalls(value: number | undefined): number {
 }
 
 /**
+ * Provider-safe tool name pattern. Every request-facing function-name API
+ * (OpenAI-compatible schemas, Anthropic tool names, Gemini function
+ * declarations) accepts only this character set and rejects anything else as
+ * an opaque upstream error mid-turn, so the registry enforces it at
+ * registration instead.
+ */
+const TOOL_NAME_PATTERN = /^[a-zA-Z0-9_-]+$/
+
+/**
  * Tool registry and execution pipeline. Scoped registrations shadow globals;
  * one visibility resolver feeds presentation, lookup, and dispatch.
  */
@@ -1022,11 +1031,18 @@ export class ToolRuntime extends Service {
   /**
    * Register globally or in the calling agent scope. Scoped tools shadow
    * globals; duplicates within one layer and the reserved `run_code` name fail.
+   * Tool names must match `^[a-zA-Z0-9_-]+$`: provider APIs (OpenAI-compatible
+   * function schemas included) reject any other character as an opaque
+   * upstream error, so an invalid name fails here at registration instead of
+   * on the first model request.
    * @param definition - tool schema, execution, and optional finalization/presentation callbacks.
    * @returns the exact disposer that unregisters the tool.
    */
   register(definition: ToolDefinition): () => void {
     const name = definition.name
+    if (!TOOL_NAME_PATTERN.test(name)) {
+      throw new TypeError(`tool "${name}" must match ${TOOL_NAME_PATTERN.source} — provider APIs reject other characters in function names; rename the tool or fix the plugin that registers it`)
+    }
     const output = (definition as Partial<ToolDefinition>).output
     if (output === undefined || typeof output !== 'object'
       || typeof output.render !== 'function'
