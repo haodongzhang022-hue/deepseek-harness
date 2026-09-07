@@ -1,0 +1,33 @@
+{
+  "source_port": 8012,
+  "title": "release_control 注册表前缀合并机制 — 组件扩充传播到已初始化 state + pattern_library/legacy_archive 模块映射 (V4-P0 Issue A)",
+  "change_type": "feature",
+  "affected_components": [
+    "release_control/registry.py"
+  ],
+  "objective": "模块注册表的组件前缀升级能合并进已初始化的运行态队列 state, 使 config/trading 的 tests/ 前缀与 pattern_library/legacy_archive 新模块映射即时生效, 支撑 V4-P0 后续各 Issue 提交不被 unmapped 拒绝",
+  "before_behavior": "_init_modules 只按模块名注入新模块; 已存在模块 (如 config/trading) 的 components 列表不随代码 DEFAULT_MODULES 扩充而合并, 导致新增的 tests/test_config 等前缀在旧运行态中永远缺失, 相关提交因 affected_components unmapped 被拒",
+  "change_summary": "抽出纯函数 _init_modules_with(state, definitions): 已存在模块做组件前缀并集合并 (顺序保持/幂等不去重), 版本号以 state 为准保证单调; _init_modules 委托之。DEFAULT_MODULES 同步扩充: trading+=tests/test_trading, config+=tests/test_config, 新增 pattern_library(pattern_library/, tests/test_pattern) 与 legacy_archive(13 个弃用包+.gitignore+docs/MODULE_MATRIX.md)。测试新增于 tests/test_module_registry.py (TDD 红→绿)。与既有模块零耦合, 纯增量。",
+  "artifact_ref": "feature/multi-pattern-conformer-discovery@a42a3a1",
+  "required_capabilities": [
+    "api"
+  ],
+  "test_commands": [
+    "D:\\1ruanjian\\1.kaifa\\conda251011\\envs\\bian\\python.exe -m pytest tests/test_module_registry.py tests/test_release_control.py tests/test_release_control_mcp.py -q --no-cov -p no:cacheprovider"
+  ],
+  "test_evidence": [
+    "TDD 红→绿: 新增 2 测试先失败 (_init_modules_with 不存在 + 映射 None), 实现后全套 23 passed in 0.68s (bian env, exit 0)"
+  ],
+  "acceptance_criteria": [
+    "unit:release_control"
+  ],
+  "success_definition": [
+    "tests/test_module_registry.py 合并/幂等断言全部通过",
+    "resolve_module 对 tests/test_config*, tests/test_trading/*, pattern_library/*, dashboard/*, fin_entry.py 返回正确归属模块",
+    "既有 release_control 全套测试无回归"
+  ],
+  "failure_definition": [
+    "任一单元测试失败; 合并非幂等产生重复前缀; resolve_module 对 dashboard_8008/api/* 误判为 legacy_archive"
+  ],
+  "rollback_plan": "git revert a42a3a1 (单提交, 无数据迁移); 运行态 queue.json 中已合并的前缀保留无害 (只增不改语义)"
+}

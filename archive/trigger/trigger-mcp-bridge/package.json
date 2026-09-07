@@ -1,0 +1,33 @@
+{
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    }
+  },
+  "files": [
+    "lib/index.js",
+    "lib/invariant.js",
+    "lib/types/**/*.d.ts"
+  ],
+  "scripts": {
+    "build": "tsc"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "workspace:*"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "workspace:*",
+    "typescript": "^5.7.0"
+  },
+  "name": "@deepseek-ai/dsh-trigger-mcp-bridge",
+  "description": "MCP bridge for external trigger signals",
+  "dependencies": {
+    "@deepseek-ai/dsh-trigger": "workspace:*"
+  }
+}

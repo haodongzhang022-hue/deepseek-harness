@@ -1,0 +1,479 @@
+# Monitoring Triggers Configuration
+# Rules for adaptive risk management and model health monitoring
+
+triggers:
+  # === DATA QUALITY TRIGGERS ===
+  - name: "data_gap_detected"
+    description: "Significant data gap detected in recent bars"
+    condition: "max_gap_minutes > 30 and gap_count > 0"
+    severity: "warning"
+    cooldown_minutes: 60
+    actions:
+      - "alert_oncall"
+      - "pause_trading_symbol"
+    params:
+      max_gap_minutes: 30
+      min_gap_count: 1
+
+  - name: "data_staleness"
+    description: "No new bars received for expected period"
+    condition: "minutes_since_last_bar > expected_interval_minutes * 3"
+    severity: "critical"
+    cooldown_minutes: 15
+    actions:
+      - "alert_oncall"
+      - "switch_to_backup_provider"
+      - "halt_trading_symbol"
+    params:
+      expected_interval_minutes: 1  # For 1min bars
+
+  - name: "price_jump_anomaly"
+    description: "Extreme price move detected (potential bad tick)"
+    condition: "price_jump_pct > 0.05"  # 5%
+    severity: "warning"
+    cooldown_minutes: 30
+    actions:
+      - "flag_bar_for_review"
+      - "verify_with_secondary_source"
+
+  - name: "volume_spike_anomaly"
+    description: "Abnormal volume spike (z-score > 10)"
+    condition: "volume_zscore > 10"
+    severity: "info"
+    cooldown_minutes: 60
+    actions:
+      - "log_for_analysis"
+
+  # === MODEL HEALTH TRIGGERS ===
+  - name: "dl_prediction_drift"
+    description: "DL model predictions deviating from historical distribution"
+    condition: "prediction_std > 3 * historical_std or prediction_mean_shift > 2 * historical_std"
+    severity: "warning"
+    cooldown_hours: 4
+    actions:
+      - "retrain_dl_model"
+      - "reduce_model_weight"
+    params:
+      lookback_days: 30
+      std_threshold: 3.0
+
+  - name: "dl_regime_confidence_low"
+    description: "Regime classifier confidence below threshold"
+    condition: "regime_max_prob < 0.6"
+    severity: "warning"
+    cooldown_hours: 2
+    actions:
+      - "reduce_leverage"
+      - "switch_to_regime_agnostic_strategy"
+    params:
+      min_confidence: 0.6
+
+  - name: "rl_policy_kl_divergence"
+    description: "RL policy diverging from baseline (distribution shift)"
+    condition: "kl_divergence > 0.1"
+    severity: "critical"
+    cooldown_hours: 6
+    actions:
+      - "rollback_rl_actor"
+      - "retrain_rl_critic"
+      - "halt_rl_trading"
+    params:
+      kl_threshold: 0.1
+
+  - name: "rl_critic_loss_spike"
+    description: "RL critic loss suddenly increasing"
+    condition: "critic_loss > 3 * rolling_mean_critic_loss"
+    severity: "warning"
+    cooldown_hours: 2
+    actions:
+      - "retrain_rl_critic"
+      - "increase_replay_buffer_sampling"
+
+  - name: "rl_action_entropy_collapse"
+    description: "RL policy entropy too low (overfitting/exploitation only)"
+    condition: "action_entropy < 0.01"
+    severity: "warning"
+    cooldown_hours: 4
+    actions:
+      - "increase_entropy_coefficient"
+      - "add_exploration_noise"
+
+  # === PORTFOLIO RISK TRIGGERS ===
+  - name: "daily_loss_limit"
+    description: "Daily loss exceeds limit"
+    condition: "daily_pnl_pct < -0.03"  # -3%
+    severity: "critical"
+    cooldown_hours: 24
+    actions:
+      - "halt_all_trading"
+      - "flatten_all_positions"
+      - "alert_oncall"
+    params:
+      limit_pct: -0.03
+
+  - name: "max_drawdown_breach"
+    description: "Portfolio drawdown exceeds maximum"
+    condition: "current_drawdown_pct > 0.10"  # 10%
+    severity: "critical"
+    cooldown_hours: 24
+    actions:
+      - "reduce_all_positions_50pct"
+      - "halt_new_entries"
+      - "alert_oncall"
+    params:
+      max_dd_pct: 0.10
+
+  - name: "position_concentration"
+    description: "Single position exceeds concentration limit"
+    condition: "max_position_pct > 0.20"  # 20% of portfolio
+    severity: "warning"
+    cooldown_hours: 4
+    actions:
+      - "reduce_oversized_positions"
+      - "alert_risk_team"
+    params:
+      max_position_pct: 0.20
+
+  - name: "correlation_spike"
+    description: "Portfolio correlation suddenly increased"
+    condition: "avg_pairwise_correlation > 0.8"
+    severity: "warning"
+    cooldown_hours: 6
+    actions:
+      - "reduce_leverage"
+      - "diversify_positions"
+    params:
+      correlation_threshold: 0.8
+
+  - name: "var_breach"
+    description: "Portfolio VaR exceeded"
+    condition: "current_var_99 > var_limit"
+    severity: "critical"
+    cooldown_hours: 12
+    actions:
+      - "reduce_positions_proportional"
+      - "alert_oncall"
+    params:
+      var_limit_multiplier: 1.5
+
+  # === EXECUTION TRIGGERS ===
+  - name: "slippage_degradation"
+    description: "Execution slippage worse than expected"
+    condition: "avg_slippage_bps > 2 * expected_slippage_bps"
+    severity: "warning"
+    cooldown_hours: 2
+    actions:
+      - "reduce_order_size"
+      - "increase_limit_order_offset"
+      - "review_execution_algo"
+    params:
+      expected_slippage_bps: 5
+
+  - name: "fill_rate_drop"
+    description: "Order fill rate dropped significantly"
+    condition: "fill_rate < 0.85"
+    severity: "warning"
+    cooldown_hours: 1
+    actions:
+      - "increase_limit_price_buffer"
+      - "check_broker_connectivity"
+    params:
+      min_fill_rate: 0.85
+
+  - name: "order_reject_spike"
+    description: "High order rejection rate"
+    condition: "reject_rate > 0.10"
+    severity: "critical"
+    cooldown_minutes: 30
+    actions:
+      - "halt_order_submission"
+      - "check_margin_availability"
+      - "verify_broker_status"
+    params:
+      max_reject_rate: 0.10
+
+  # === MARKET REGIME TRIGGERS ===
+  - name: "regime_transition"
+    description: "Market regime transition detected"
+    condition: "regime_transition_prob > 0.3"
+    severity: "info"
+    cooldown_hours: 4
+    actions:
+      - "log_regime_change"
+      - "adjust_strategy_weights"
+    params:
+      transition_threshold: 0.3
+
+  - name: "volatility_regime_change"
+    description: "Volatility regime shift (low->high or high->low)"
+    condition: "vol_regime_changed and vol_ratio > 2.0"
+    severity: "warning"
+    cooldown_hours: 6
+    actions:
+      - "resize_positions_for_vol"
+      - "update_risk_parameters"
+    params:
+      vol_ratio_threshold: 2.0
+
+  # === SYSTEM HEALTH TRIGGERS ===
+  - name: "latency_spike"
+    description: "System latency spike detected"
+    condition: "p99_latency_ms > 1000"
+    severity: "warning"
+    cooldown_minutes: 10
+    actions:
+      - "check_system_resources"
+      - "reduce_processing_load"
+    params:
+      latency_threshold_ms: 1000
+
+  - name: "memory_pressure"
+    description: "High memory usage"
+    condition: "memory_usage_pct > 0.85"
+    severity: "warning"
+    cooldown_minutes: 30
+    actions:
+      - "clear_caches"
+      - "reduce_buffer_sizes"
+    params:
+      memory_threshold: 0.85
+
+  - name: "disk_space_low"
+    description: "Disk space running low"
+    condition: "disk_free_gb < 10"
+    severity: "critical"
+    cooldown_hours: 1
+    actions:
+      - "archive_old_data"
+      - "clean_temp_files"
+      - "alert_oncall"
+    params:
+      min_free_gb: 10
+
+# Action definitions (implemented in monitoring/engine.py)
+actions:
+  alert_oncall:
+    description: "Send alert to on-call engineer"
+    type: "notification"
+    channels: ["pagerduty", "slack"]
+
+  pause_trading_symbol:
+    description: "Pause trading for specific symbol"
+    type: "trading_control"
+    params:
+      action: "pause"
+      scope: "symbol"
+
+  halt_trading_symbol:
+    description: "Halt trading for specific symbol (stronger than pause)"
+    type: "trading_control"
+    params:
+      action: "halt"
+      scope: "symbol"
+
+  halt_all_trading:
+    description: "Emergency halt all trading"
+    type: "trading_control"
+    params:
+      action: "halt"
+      scope: "all"
+
+  flatten_all_positions:
+    description: "Close all positions at market"
+    type: "trading_control"
+    params:
+      action: "flatten"
+      urgency: "high"
+
+  reduce_all_positions_50pct:
+    description: "Reduce all positions by 50%"
+    type: "trading_control"
+    params:
+      action: "reduce"
+      factor: 0.5
+
+  halt_new_entries:
+    description: "Stop opening new positions"
+    type: "trading_control"
+    params:
+      action: "no_new_entries"
+
+  reduce_oversized_positions:
+    description: "Reduce positions exceeding concentration limit"
+    type: "trading_control"
+    params:
+      action: "reduce_concentration"
+
+  switch_to_backup_provider:
+    description: "Failover to backup data provider"
+    type: "system_control"
+    params:
+      action: "failover_data"
+
+  retrain_dl_model:
+    description: "Trigger DL model retraining"
+    type: "model_control"
+    params:
+      action: "retrain"
+      model_type: "dl"
+
+  retrain_rl_critic:
+    description: "Trigger RL critic retraining"
+    type: "model_control"
+    params:
+      action: "retrain"
+      model_type: "rl_critic"
+
+  rollback_rl_actor:
+    description: "Rollback RL actor to previous checkpoint"
+    type: "model_control"
+    params:
+      action: "rollback"
+      model_type: "rl_actor"
+
+  reduce_model_weight:
+    description: "Reduce model weight in ensemble"
+    type: "model_control"
+    params:
+      action: "reduce_weight"
+      factor: 0.5
+
+  increase_entropy_coefficient:
+    description: "Increase SAC entropy coefficient"
+    type: "model_control"
+    params:
+      action: "adjust_hyperparameter"
+      param: "entropy_coef"
+      factor: 2.0
+
+  add_exploration_noise:
+    description: "Add exploration noise to RL actions"
+    type: "model_control"
+    params:
+      action: "add_noise"
+      noise_std: 0.1
+
+  reduce_leverage:
+    description: "Reduce portfolio leverage"
+    type: "risk_control"
+    params:
+      action: "reduce_leverage"
+      factor: 0.7
+
+  switch_to_regime_agnostic_strategy:
+    description: "Switch to regime-agnostic strategy mode"
+    type: "strategy_control"
+    params:
+      action: "switch_mode"
+      mode: "regime_agnostic"
+
+  diversify_positions:
+    description: "Diversify portfolio to reduce correlation"
+    type: "risk_control"
+    params:
+      action: "diversify"
+
+  reduce_positions_proportional:
+    description: "Reduce positions proportional to risk contribution"
+    type: "risk_control"
+    params:
+      action: "risk_parity_reduce"
+
+  reduce_order_size:
+    description: "Reduce order sizes"
+    type: "execution_control"
+    params:
+      action: "reduce_size"
+      factor: 0.5
+
+  increase_limit_order_offset:
+    description: "Increase limit order price offset"
+    type: "execution_control"
+    params:
+      action: "adjust_offset"
+      factor: 2.0
+
+  check_broker_connectivity:
+    description: "Verify broker API connectivity"
+    type: "system_check"
+    params:
+      check: "broker_api"
+
+  halt_order_submission:
+    description: "Stop submitting new orders"
+    type: "trading_control"
+    params:
+      action: "halt_orders"
+
+  check_margin_availability:
+    description: "Verify margin availability"
+    type: "system_check"
+    params:
+      check: "margin"
+
+  verify_broker_status:
+    description: "Check broker system status"
+    type: "system_check"
+    params:
+      check: "broker_status"
+
+  log_regime_change:
+    description: "Log regime change for analysis"
+    type: "logging"
+    params:
+      event: "regime_change"
+
+  adjust_strategy_weights:
+    description: "Adjust strategy weights based on regime"
+    type: "strategy_control"
+    params:
+      action: "reweight"
+
+  resize_positions_for_vol:
+    description: "Resize positions for new volatility regime"
+    type: "risk_control"
+    params:
+      action: "vol_target_resize"
+
+  update_risk_parameters:
+    description: "Update risk parameters for new regime"
+    type: "risk_control"
+    params:
+      action: "update_params"
+
+  check_system_resources:
+    description: "Check CPU, memory, disk, network"
+    type: "system_check"
+    params:
+      check: "resources"
+
+  reduce_processing_load:
+    description: "Reduce non-critical processing"
+    type: "system_control"
+    params:
+      action: "throttle"
+
+  clear_caches:
+    description: "Clear in-memory caches"
+    type: "system_control"
+    params:
+      action: "clear_cache"
+
+  reduce_buffer_sizes:
+    description: "Reduce replay buffer sizes"
+    type: "system_control"
+    params:
+      action: "reduce_buffers"
+
+  archive_old_data:
+    description: "Archive old data to cold storage"
+    type: "data_management"
+    params:
+      action: "archive"
+      older_than_days: 365
+
+  clean_temp_files:
+    description: "Clean temporary files"
+    type: "data_management"
+    params:
+      action: "clean_temp"

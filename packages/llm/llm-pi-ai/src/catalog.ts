@@ -30,6 +30,28 @@ import type {
 } from '@earendil-works/pi-ai'
 
 /**
+ * Legacy Xiaomi token-plan route ids that historically resolved through the
+ * Xiaomi catalog entry. Keep them visible if an upstream catalog refresh drops
+ * the explicit entries while the base Xiaomi provider remains available.
+ */
+const LEGACY_PROVIDER_ALIASES: Readonly<Record<string, string>> = {
+  'xiaomi-token-plan-cn': 'xiaomi',
+  'xiaomi-token-plan-ams': 'xiaomi',
+  'xiaomi-token-plan-sgp': 'xiaomi',
+}
+
+/**
+ * Resolve the installed catalog id that should back one route id.
+ * @param provider - configured provider route id.
+ * @returns installed provider id, if present.
+ */
+function catalogSourceProvider(provider: string): BuiltinProvider | undefined {
+  const installed = getBuiltinProviders()
+  const source = LEGACY_PROVIDER_ALIASES[provider] ?? provider
+  return installed.includes(source as BuiltinProvider) ? source as BuiltinProvider : undefined
+}
+
+/**
  * Pricing for a model the installed catalog does not describe. The harness
  * never reads pi-ai's cost metadata — `replay.ts` zeroes it and no consumer
  * reports spend — so this is the absence of a fact, not a configurable rate.
@@ -143,6 +165,7 @@ export type PiAiChatTemplateVar = Extract<ChatTemplateKwargValue, { $var: string
 const CHAT_TEMPLATE_VAR_GATE: Record<PiAiChatTemplateVar, true> = {
   'thinking.enabled': true,
   'thinking.effort': true,
+  'thinking.budget': true,
 }
 
 /** The request-state placeholders a profile may name. */
@@ -157,7 +180,17 @@ let providerIndex: Map<string, Provider> | undefined
  * @returns the catalog provider index.
  */
 function catalogProviders(): Map<string, Provider> {
-  providerIndex ??= new Map(builtinProviders().map(provider => [provider.id, provider]))
+  providerIndex ??= (() => {
+    const index = new Map(builtinProviders().map(provider => [provider.id, provider]))
+    for (const [alias, source] of Object.entries(LEGACY_PROVIDER_ALIASES)) {
+      if (index.has(alias)) continue
+      const base = index.get(source)
+      if (base === undefined) continue
+      // Alias ids preserve old route keys while reusing the base provider defaults.
+      index.set(alias, { ...base, id: alias, name: alias })
+    }
+    return index
+  })()
   return providerIndex
 }
 
@@ -175,7 +208,14 @@ export function catalogProvider(provider: string): Provider | undefined {
  * @returns the catalog provider ids.
  */
 export function catalogProviderIds(): readonly string[] {
-  return getBuiltinProviders()
+  const ids = [...getBuiltinProviders()]
+  const seen = new Set(ids)
+  for (const [alias, source] of Object.entries(LEGACY_PROVIDER_ALIASES)) {
+    if (seen.has(alias) || !seen.has(source)) continue
+    seen.add(alias)
+    ids.push(alias)
+  }
+  return ids
 }
 
 /**
@@ -185,7 +225,9 @@ export function catalogProviderIds(): readonly string[] {
  */
 export function catalogModels(provider: string): Map<string, Model<Api>> {
   if (!catalogProviders().has(provider)) return new Map()
-  const models = getBuiltinModels(provider as BuiltinProvider) as Model<Api>[]
+  const source = catalogSourceProvider(provider)
+  if (source === undefined) return new Map()
+  const models = getBuiltinModels(source) as Model<Api>[]
   return new Map(models.map(model => [model.id, model]))
 }
 
@@ -239,6 +281,7 @@ const COMPLETIONS_COMPAT_GATE = {
   sendSessionAffinityHeaders: 'withhold',
   deferredToolsMode: 'withhold',
   sessionAffinityFormat: 'withhold',
+  thinkingTokenBudgetField: 'withhold',
 } as const satisfies Record<keyof OpenAICompletionsCompat, CompatDisposition>
 
 /** Disposition of every `OpenAIResponsesCompat` field; a drift gate like the one above. */
@@ -264,6 +307,7 @@ const ANTHROPIC_COMPAT_GATE = {
   supportsStrictTools: 'offer',
   sendSessionAffinityHeaders: 'withhold',
   supportsToolReferences: 'withhold',
+  allowedFallbackModels: 'withhold',
 } as const satisfies Record<keyof AnthropicMessagesCompat, CompatDisposition>
 
 /** Disposition of every `BedrockCompat` field; a drift gate like the one above. */

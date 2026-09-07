@@ -1,0 +1,18 @@
+{
+  "name": "@dsh-external/dsh-relay-cards",
+  "version": "0.1.0",
+  "description": "0903 主干接力卡流转工具插件：relay_write / relay_read / relay_list / relay_update，JSON 单文件持久化，状态机 open→in_progress→done，history 审计留痕",
+  "type": "module",
+  "private": true,
+  "main": "./src/index.ts",
+  "files": ["src"],
+  "scripts": {
+    "test": "node --test tests/store.test.mjs",
+    "smoke": "node tests/load-smoke.mjs"
+  },
+  "dependencies": {
+    "@deepseek-ai/cordis": "*",
+    "@deepseek-ai/dsh-tools": "*",
+    "schemastery": "*"
+  }
+}

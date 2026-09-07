@@ -7,7 +7,7 @@ import clsx from 'clsx'
 import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 import type { ConversationSlotProps, InputZone } from '../contract/slots.ts'
 import { conversationPhase } from '../contract/snapshot.ts'
-import { HeroShell, WorkspaceChip, workspaceLabel } from './EmptyHero.tsx'
+import { HeroGlow, HeroShell, WorkspaceChip, workspaceLabel } from './EmptyHero.tsx'
 import css from './ConversationRoot.module.css'
 
 /** Full props composed from the slot contract. */
@@ -316,12 +316,15 @@ export function ConversationRoot({
     </div>
   )
 
-  // The placeholder chip ("Choose workspace") and the Workspace-trigger input travel
-  // together: no workspace picked yet (cold start, no session at all), or a
-  // blank session whose workspace vanished (deleted from the sidebar). The
-  // bar is ONE session-maybe slot rendered unconditionally — inert is a prop,
-  // not a different tree, so the textarea DOM survives the transition.
-  const inert = sessionId === undefined || (hero && chipTitle === undefined)
+  // The bar is ONE session-maybe slot rendered unconditionally — inert is a
+  // prop, not a different tree, so the textarea DOM survives the transition.
+  // Only the true cold start (no session at all, so no input machine exists)
+  // locks the bar into the Workspace-trigger posture. A blank session whose
+  // workspace mapping is missing (deleted/renamed from the sidebar) must NOT
+  // block the composer: the first message is where the user assigns roles
+  // and agents (@ mentions, input triggers), so it stays live — the workspace
+  // chip above remains an ordinary non-blocking picker.
+  const inert = sessionId === undefined
   // A raised block is the same inert posture with the blocker's own reason:
   // one disabled textarea, never a second tree. The no-workspace state wins
   // when both hold — picking a workspace is the earlier prerequisite.
@@ -341,10 +344,16 @@ export function ConversationRoot({
         // user clears it.
         ? { blocked: composerBlock, placeholder: composerBlock.reason }
         : hero ? { placeholder: t('placeholder.hero') } : {}),
+    overlay: sessionId === undefined ? undefined : renderSlot('conversation.input.overlay', {}),
+    leftItems: zone === undefined ? null : renderSlot('conversation.input.left', zone),
+    rightItems: zone === undefined ? null : renderSlot('conversation.input.right', zone),
+    // Ambient dock under the card shares the composer's width constraint.
+    footer: !hero && zone !== undefined ? renderSlot('conversation.composer.dock', zone) : null,
   })
 
   const composerBar = (
     <div className={clsx(css.composerStack, hero && css.composerHero)}>
+      {hero && <HeroGlow className={css.heroGlow} />}
       {hero && <HeroShell t={t} renderSlot={renderSlot} />}
       {hero && heroWorkspaceRow}
       {zone !== undefined && renderSlot('conversation.input.dock', zone)}
@@ -372,24 +381,22 @@ export function ConversationRoot({
   return (
     <div ref={rootResizeRef} className={css.root} data-phase={phase}>
       {sessionId === undefined ? null : renderSlot('conversation.session.header', {})}
-      <div className={css.body}>
-        <div className={css.scrollBody} data-conversation-scroll="">
-          {sessionId === undefined ? null : renderSlot('conversation.session', {})}
-          {composerSeat}
-        </div>
-        {/* Width handles only while a transcript is on screen; the hero has no
-            content column to size. */}
-        {phase === 'active' && (['left', 'right'] as const).map(side => (
-          <WidthHandle
-            key={side}
-            side={side}
-            onStart={onHandleStart}
-            onDrag={onHandleDrag}
-            onCommit={onHandleCommit}
-            onEnd={onHandleEnd}
-          />
-        ))}
+      <div className={css.scrollBody} data-conversation-scroll="">
+        {sessionId === undefined ? null : renderSlot('conversation.session', {})}
+        {composerSeat}
       </div>
+      {/* Width handles only while a transcript is on screen; the hero has no
+          content column to size. */}
+      {phase === 'active' && (['left', 'right'] as const).map(side => (
+        <WidthHandle
+          key={side}
+          side={side}
+          onStart={onHandleStart}
+          onDrag={onHandleDrag}
+          onCommit={onHandleCommit}
+          onEnd={onHandleEnd}
+        />
+      ))}
     </div>
   )
 }

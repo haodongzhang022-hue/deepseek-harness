@@ -1,0 +1,34 @@
+{
+  "extends": "tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types",
+    "composite": true,
+    "tsBuildInfoFile": "lib/tsconfig.tsbuildinfo"
+  },
+  "references": [
+    {
+      "path": "../plugin-inventory"
+    },
+    {
+      "path": "../../typert/typert-protocol"
+    },
+    {
+      "path": "../../session/session"
+    },
+    {
+      "path": "../../settings/settings"
+    },
+    {
+      "path": "../../../runtime-diagnostics/invariants"
+    }
+  ],
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "lib",
+    "node_modules",
+    "tests"
+  ]
+}

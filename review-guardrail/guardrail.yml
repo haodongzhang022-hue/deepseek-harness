@@ -1,0 +1,121 @@
+# review-guardrail 声明化策略（相当于云端 .cnb.yml 的机制化配置）
+# 版本: 0.2.0
+# 修改这份文件即可调参，无需改代码；要把改动打回/回滚 → git revert 本文件即可。
+# 评审角色/prompt/修复闭环都在这里声明，改配置即换角色，机制全自动。
+
+version: "0.2.0"
+
+# 1) 行级自动评审配置
+review:
+  # 评审内核路线：llm(用 dsh + DEEPSEEK_API_KEY 跑真实评审) | static(内置保守检测) | hybrid(两者合并去重)
+  route: "llm"
+  # 后端适配器：dsh | pr-agent（预留，接入成熟开源评审框架）
+  adapter: "dsh"
+  # 检查优先级：安全漏洞 → 潜在 Bug → 代码质量 → 性能
+  priority:
+    - "security"
+    - "bug"
+    - "quality"
+    - "performance"
+  # 只评审新增行（+ 行），不看未改动老代码
+  only_added_lines: true
+  # 文件过滤：正则，命中即跳过（锁文件/产物/文档等非评审对象）
+  file_filter:
+    exclude:
+      - ".*\\.lock$"
+      - ".*\\.snap$"
+      - ".*\\.(md|txt|json)$"
+      - "^vendor/"
+      - "pnpm-lock\\.yaml$"
+  # 评审角色（对应云端 npc:go 的 role）：prompt 声明化，改这里即换角色/换重点
+  role: "代码审查员"
+  system_prompt: |-
+    你是{role}。只评审下面真实 diff 的新增行（只读 + 新增行，不看未改动老代码）。
+    按优先级检查：{priority}。逐条给出行级结论并落严重度，
+    不编造 diff 里不存在的问题。给出"通过 / 需修改"结论及具体修改点。
+  user_prompt: |-
+    逐条给出行级结论，严重度 critical / warning / info。只输出一个 JSON 数组，
+    不要任何其他文字或格式，每一项结构严格为：
+    {"file": str, "line_start": int, "line_end": int,
+    "severity": "critical|warning|info", "category": "security|bug|quality|performance",
+    "message": str, "suggestion": str}。若没有发现问题，只输出空数组 []。
+    评审对象（文件 → 新增行）:
+    {payload}
+
+# 2) 严重度门禁：达到某严重度即打回，红灯阻塞
+gate:
+  # 最低打回档位：critical=有任何 critical 即打回；needs_modification=warning/info 超限也打回
+  verdict_gate: "needs_modification"
+  max_critical: 0
+  max_warning: 3
+  max_info: 10
+  # 合并前置要求：仅当评审结论文档通过(verdict=passed ≈ approved)才允许合并
+  merge_requires: "approved"
+
+# 3) 信号灯断言（质量护栏，CI 每次提交都跑）
+assertions:
+  enabled: true
+  # 断言脚本目录（相对本配置文件）：每修一个 bug 往这里加一条断言，机制随 bug 修复更牢
+  dir: "tests"
+  fail_fast: false
+  # 支持的命令后缀：.py 跨平台确定性 | .sh 类 CNB 风格
+  suffixes:
+    - ".py"
+    - ".sh"
+
+# 4) GitHub 联动（对应云端 git:reviewer / git:auto-merge）
+github:
+  # 自动合并方式：squash | merge | rebase（当前实现 squash 布尔开关）
+  squash: true
+  # 合并后删除源分支（对应云端 git:auto-merge removeSourceBranch）
+  delete_branch: true
+  # 自动分配评审人（对应云端 git:reviewer add-reviewer）；空 = 不自动分配
+  reviewers: []
+
+# 5) 评审→修复闭环 + 轮次护栏（对应云端 pull_request.changes_requested 阶段）
+loop:
+  # 评审→修复最多 N 轮，达上限停止自动修复、反馈人类（云端"10 轮靠人记"会丢，本地持久化不丢）
+  max_rounds: 10
+  # 闭环状态/产物目录（相对本配置文件所在目录），按 PR 号落盘
+  state_dir: "data/review_loop"
+  # 超限后写给人类的反馈文案
+  feedback_message: |-
+    评审→修复已达上限，自动修复已停止。需要人工介入：调整需求 / 修改框架 / 收紧评审标准，
+    而不是继续盲修。
+
+# 6) 外部插件安全评审闸（self-evolution ③）：合并前对插件源码做能力扫描 + 可信预跑
+safety:
+  enabled: true
+  # 只扫描这些源码扩展名（忽略 node_modules / .git）
+  focus_exts:
+    - ".ts"
+    - ".tsx"
+    - ".js"
+    - ".jsx"
+    - ".mjs"
+    - ".cjs"
+  # 命中即 blocked 的能力 id（安全防线，缺省已覆盖病毒/后门/网络外联/原型污染）
+  block_on:
+    - "child_process"
+    - "eval_code"
+    - "prototype_pollution"
+    - "shell_meta"
+  # 允许、不阻塞的能力（按需补白名单；不在清单又命中的未知能力 → warning 需人工过一眼）
+  allow_list:
+    - "fs_write"
+  # 沙箱预跑路线：static(纯静态正则，无需 node) | node(node 内置 vm 真实预跑一次，观测能力)
+  executor: "static"
+  # 沙箱预跑用的 node 可执行；空 => 从 PATH 探测（static 路线忽略）
+  node_bin: ""
+  # node 沙箱预跑超时（毫秒）
+  timeout_ms: 5000
+
+# 7) 信任标记：插件必须达到最低信任级才允许激活；改动后降级 dirty 需重新评审
+trust:
+  enabled: true
+  # 信任记录文件名（相对本配置文件所在目录）
+  file: "safety_trust.json"
+  # 进入激活所需最低信任级：verified | trusted
+  required: "verified"
+  # 插件改动后是否自动降级为 dirty（需重新评审）
+  dirty_on_change: true

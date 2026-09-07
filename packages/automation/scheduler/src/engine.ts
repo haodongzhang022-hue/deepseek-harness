@@ -13,8 +13,10 @@ import type { ActionRunner } from './action.ts'
 export interface ScheduledJob {
   /** Stable name for logs, journal lines, and backoff state. */
   readonly name: string
-  /** Fire cadence in milliseconds. */
-  readonly everyMs: number
+  /** One-shot: fire at this exact timestamp (ms since epoch), then stop. */
+  readonly onceAt?: number
+  /** Recurring: fire cadence in milliseconds. Mutually exclusive with onceAt. */
+  readonly everyMs?: number
   /** Maximum random start-of-interval shift, for fleet de-synchronization. */
   readonly jitterMs?: number
 }
@@ -56,7 +58,7 @@ export class SchedulerEngine {
     const now = this.time()
     const fired: { job: string; ok: boolean }[] = []
     for (const job of this.options.jobs) {
-      if ((this.nextDueAt.get(job.name) ?? 0) > now) continue
+      if (this.dueAt(job) > now) continue
       const outcome = await this.fire(job, now)
       fired.push({ job: job.name, ok: outcome.ok })
     }
@@ -68,9 +70,18 @@ export class SchedulerEngine {
     const now = this.time()
     let min = Number.POSITIVE_INFINITY
     for (const job of this.options.jobs) {
-      min = Math.min(min, Math.max(0, (this.nextDueAt.get(job.name) ?? 0) - now))
+      min = Math.min(min, Math.max(0, this.dueAt(job) - now))
     }
     return min === Number.POSITIVE_INFINITY ? 0 : min
+  }
+
+  /** When this job next fires: its fixed onceAt, or the backoff-tracked next interval. */
+  private dueAt(job: ScheduledJob): number {
+    if (job.onceAt !== undefined) {
+      // Once fired, the next-due marker (Infinity) takes over from onceAt.
+      return this.nextDueAt.get(job.name) ?? job.onceAt
+    }
+    return this.nextDueAt.get(job.name) ?? 0
   }
 
   private async fire(job: ScheduledJob, startedAt: number): Promise<ActionResult0> {
@@ -84,12 +95,16 @@ export class SchedulerEngine {
     const failures = result.ok ? 0 : (this.consecutiveFailures.get(job.name) ?? 0) + 1
     this.consecutiveFailures.set(job.name, failures)
 
-    // Backoff doubles per consecutive failure up to eight intervals; jitter
-    // shifts every interval so multiple deployments do not fire in lockstep.
-    const base = job.everyMs * Math.min(2 ** failures, 8)
-    const jitter = job.jitterMs === undefined ? 0 : Math.floor(this.rand() * job.jitterMs)
-    const at = startedAt + base + jitter
-    this.nextDueAt.set(job.name, at)
+    if (job.onceAt !== undefined) {
+      // One-shot: never fire again, regardless of outcome.
+      this.nextDueAt.set(job.name, Number.POSITIVE_INFINITY)
+    } else {
+      // Backoff doubles per consecutive failure up to eight intervals; jitter
+      // shifts every interval so multiple deployments do not fire in lockstep.
+      const base = (job.everyMs ?? 0) * Math.min(2 ** failures, 8)
+      const jitter = job.jitterMs === undefined ? 0 : Math.floor(this.rand() * job.jitterMs)
+      this.nextDueAt.set(job.name, startedAt + base + jitter)
+    }
 
     const entry: JournalEntry = {
       at: new Date(began).toISOString(),

@@ -1,0 +1,440 @@
+# US Futures Contract Specifications
+# All values per CME Group specifications
+# tick_size: minimum price increment
+# tick_value: dollar value per tick per contract
+# margin_initial: initial margin requirement (approximate, varies by broker)
+# margin_maintenance: maintenance margin
+# trading_hours: reference to sessions in settings.yaml
+# roll_rule: how to roll contracts (volume, oi, date, custom)
+# roll_offset_days: days before expiration to start roll
+# multiplier: contract multiplier (point value)
+# exchange: CME, CBOT, NYMEX, COMEX
+# sector: equity, energy, metal, treasury, fx, ag, livestock
+# timezone: contract trading timezone
+
+symbols:
+  # Equity Index Futures (CME)
+  ES:
+    name: "E-mini S&P 500"
+    exchange: "CME"
+    sector: "equity"
+    tick_size: 0.25
+    tick_value: 12.50
+    multiplier: 50
+    margin_initial: 12650
+    margin_maintenance: 11500
+    trading_hours: "cme_globex"
+    roll_rule: "volume"
+    roll_offset_days: 7
+    expiration_months: [3, 6, 9, 12]  # H, M, U, Z
+    continuous_symbol: "ES1!"
+    timezone: "America/Chicago"
+
+  NQ:
+    name: "E-mini Nasdaq-100"
+    exchange: "CME"
+    sector: "equity"
+    tick_size: 0.25
+    tick_value: 5.00
+    multiplier: 20
+    margin_initial: 17600
+    margin_maintenance: 16000
+    trading_hours: "cme_globex"
+    roll_rule: "volume"
+    roll_offset_days: 7
+    expiration_months: [3, 6, 9, 12]
+    continuous_symbol: "NQ1!"
+    timezone: "America/Chicago"
+
+  YM:
+    name: "E-mini Dow Jones Industrial Average"
+    exchange: "CBOT"
+    sector: "equity"
+    tick_size: 1.0
+    tick_value: 5.00
+    multiplier: 5
+    margin_initial: 11000
+    margin_maintenance: 10000
+    trading_hours: "cme_globex"
+    roll_rule: "volume"
+    roll_offset_days: 7
+    expiration_months: [3, 6, 9, 12]
+    continuous_symbol: "YM1!"
+    timezone: "America/Chicago"
+
+  RTY:
+    name: "E-mini Russell 2000"
+    exchange: "CME"
+    sector: "equity"
+    tick_size: 0.1
+    tick_value: 5.00
+    multiplier: 50
+    margin_initial: 8250
+    margin_maintenance: 7500
+    trading_hours: "cme_globex"
+    roll_rule: "volume"
+    roll_offset_days: 7
+    expiration_months: [3, 6, 9, 12]
+    continuous_symbol: "RTY1!"
+    timezone: "America/Chicago"
+
+  # Energy Futures (NYMEX)
+  CL:
+    name: "Crude Oil WTI"
+    exchange: "NYMEX"
+    sector: "energy"
+    tick_size: 0.01
+    tick_value: 10.00
+    multiplier: 1000
+    margin_initial: 7425
+    margin_maintenance: 6750
+    trading_hours: "cme_globex"
+    roll_rule: "volume"
+    roll_offset_days: 5
+    expiration_months: [1,2,3,4,5,6,7,8,9,10,11,12]  # Monthly
+    continuous_symbol: "CL1!"
+    timezone: "America/New_York"
+
+  NG:
+    name: "Natural Gas Henry Hub"
+    exchange: "NYMEX"
+    sector: "energy"
+    tick_size: 0.001
+    tick_value: 10.00
+    multiplier: 10000
+    margin_initial: 3300
+    margin_maintenance: 3000
+    trading_hours: "cme_globex"
+    roll_rule: "volume"
+    roll_offset_days: 5
+    expiration_months: [1,2,3,4,5,6,7,8,9,10,11,12]
+    continuous_symbol: "NG1!"
+    timezone: "America/New_York"
+
+  RB:
+    name: "RBOB Gasoline"
+    exchange: "NYMEX"
+    sector: "energy"
+    tick_size: 0.0001
+    tick_value: 4.20
+    multiplier: 42000
+    margin_initial: 4950
+    margin_maintenance: 4500
+    trading_hours: "cme_globex"
+    roll_rule: "volume"
+    roll_offset_days: 5
+    expiration_months: [1,2,3,4,5,6,7,8,9,10,11,12]
+    continuous_symbol: "RB1!"
+    timezone: "America/New_York"
+
+  HO:
+    name: "NY Harbor ULSD (Heating Oil)"
+    exchange: "NYMEX"
+    sector: "energy"
+    tick_size: 0.0001
+    tick_value: 4.20
+    multiplier: 42000
+    margin_initial: 4950
+    margin_maintenance: 4500
+    trading_hours: "cme_globex"
+    roll_rule: "volume"
+    roll_offset_days: 5
+    expiration_months: [1,2,3,4,5,6,7,8,9,10,11,12]
+    continuous_symbol: "HO1!"
+    timezone: "America/New_York"
+
+  # Metals Futures (COMEX)
+  GC:
+    name: "Gold 100 oz"
+    exchange: "COMEX"
+    sector: "metal"
+    tick_size: 0.10
+    tick_value: 10.00
+    multiplier: 100
+    margin_initial: 11000
+    margin_maintenance: 10000
+    trading_hours: "cme_globex"
+    roll_rule: "volume"
+    roll_offset_days: 7
+    expiration_months: [2,4,6,8,10,12]  # G, J, M, Q, V, Z
+    continuous_symbol: "GC1!"
+    timezone: "America/New_York"
+
+  SI:
+    name: "Silver 5000 oz"
+    exchange: "COMEX"
+    sector: "metal"
+    tick_size: 0.005
+    tick_value: 25.00
+    multiplier: 5000
+    margin_initial: 13200
+    margin_maintenance: 12000
+    trading_hours: "cme_globex"
+    roll_rule: "volume"
+    roll_offset_days: 7
+    expiration_months: [3,5,7,9,12]  # H, K, N, U, Z
+    continuous_symbol: "SI1!"
+    timezone: "America/New_York"
+
+  HG:
+    name: "Copper Grade 1"
+    exchange: "COMEX"
+    sector: "metal"
+    tick_size: 0.0005
+    tick_value: 12.50
+    multiplier: 25000
+    margin_initial: 5500
+    margin_maintenance: 5000
+    trading_hours: "cme_globex"
+    roll_rule: "volume"
+    roll_offset_days: 7
+    expiration_months: [1,2,3,4,5,6,7,8,9,10,11,12]
+    continuous_symbol: "HG1!"
+    timezone: "America/New_York"
+
+  # Treasury Futures (CBOT)
+  ZB:
+    name: "US Treasury Bond 30Y"
+    exchange: "CBOT"
+    sector: "treasury"
+    tick_size: 0.03125  # 1/32
+    tick_value: 31.25
+    multiplier: 100000
+    margin_initial: 3300
+    margin_maintenance: 3000
+    trading_hours: "cme_globex"
+    roll_rule: "volume"
+    roll_offset_days: 7
+    expiration_months: [3,6,9,12]  # H, M, U, Z
+    continuous_symbol: "ZB1!"
+    timezone: "America/Chicago"
+
+  ZN:
+    name: "US Treasury Note 10Y"
+    exchange: "CBOT"
+    sector: "treasury"
+    tick_size: 0.015625  # 1/64
+    tick_value: 15.625
+    multiplier: 100000
+    margin_initial: 1320
+    margin_maintenance: 1200
+    trading_hours: "cme_globex"
+    roll_rule: "volume"
+    roll_offset_days: 7
+    expiration_months: [3,6,9,12]
+    continuous_symbol: "ZN1!"
+    timezone: "America/Chicago"
+
+  ZF:
+    name: "US Treasury Note 5Y"
+    exchange: "CBOT"
+    sector: "treasury"
+    tick_size: 0.0078125  # 1/128
+    tick_value: 7.8125
+    multiplier: 100000
+    margin_initial: 825
+    margin_maintenance: 750
+    trading_hours: "cme_globex"
+    roll_rule: "volume"
+    roll_offset_days: 7
+    expiration_months: [3,6,9,12]
+    continuous_symbol: "ZF1!"
+    timezone: "America/Chicago"
+
+  ZT:
+    name: "US Treasury Note 2Y"
+    exchange: "CBOT"
+    sector: "treasury"
+    tick_size: 0.00390625  # 1/256
+    tick_value: 7.8125
+    multiplier: 200000
+    margin_initial: 550
+    margin_maintenance: 500
+    trading_hours: "cme_globex"
+    roll_rule: "volume"
+    roll_offset_days: 7
+    expiration_months: [3,6,9,12]
+    continuous_symbol: "ZT1!"
+    timezone: "America/Chicago"
+
+  # FX Futures (CME)
+  6E:
+    name: "Euro FX"
+    exchange: "CME"
+    sector: "fx"
+    tick_size: 0.00005
+    tick_value: 6.25
+    multiplier: 125000
+    margin_initial: 2200
+    margin_maintenance: 2000
+    trading_hours: "cme_globex"
+    roll_rule: "volume"
+    roll_offset_days: 7
+    expiration_months: [3,6,9,12]
+    continuous_symbol: "6E1!"
+    timezone: "America/Chicago"
+
+  6J:
+    name: "Japanese Yen FX"
+    exchange: "CME"
+    sector: "fx"
+    tick_size: 0.0000005
+    tick_value: 6.25
+    multiplier: 12500000
+    margin_initial: 2200
+    margin_maintenance: 2000
+    trading_hours: "cme_globex"
+    roll_rule: "volume"
+    roll_offset_days: 7
+    expiration_months: [3,6,9,12]
+    continuous_symbol: "6J1!"
+    timezone: "America/Chicago"
+
+  6B:
+    name: "British Pound FX"
+    exchange: "CME"
+    sector: "fx"
+    tick_size: 0.00005
+    tick_value: 6.25
+    multiplier: 62500
+    margin_initial: 2200
+    margin_maintenance: 2000
+    trading_hours: "cme_globex"
+    roll_rule: "volume"
+    roll_offset_days: 7
+    expiration_months: [3,6,9,12]
+    continuous_symbol: "6B1!"
+    timezone: "America/Chicago"
+
+  6A:
+    name: "Australian Dollar FX"
+    exchange: "CME"
+    sector: "fx"
+    tick_size: 0.00005
+    tick_value: 5.00
+    multiplier: 100000
+    margin_initial: 2200
+    margin_maintenance: 2000
+    trading_hours: "cme_globex"
+    roll_rule: "volume"
+    roll_offset_days: 7
+    expiration_months: [3,6,9,12]
+    continuous_symbol: "6A1!"
+    timezone: "America/Chicago"
+
+  6C:
+    name: "Canadian Dollar FX"
+    exchange: "CME"
+    sector: "fx"
+    tick_size: 0.00005
+    tick_value: 5.00
+    multiplier: 100000
+    margin_initial: 2200
+    margin_maintenance: 2000
+    trading_hours: "cme_globex"
+    roll_rule: "volume"
+    roll_offset_days: 7
+    expiration_months: [3,6,9,12]
+    continuous_symbol: "6C1!"
+    timezone: "America/Chicago"
+
+  # Agricultural Futures (CBOT)
+  ZC:
+    name: "Corn"
+    exchange: "CBOT"
+    sector: "ag"
+    tick_size: 0.0025  # 1/4 cent
+    tick_value: 12.50
+    multiplier: 5000
+    margin_initial: 1650
+    margin_maintenance: 1500
+    trading_hours: "cme_globex"
+    roll_rule: "volume"
+    roll_offset_days: 7
+    expiration_months: [3,5,7,9,12]
+    continuous_symbol: "ZC1!"
+    timezone: "America/Chicago"
+
+  ZS:
+    name: "Soybeans"
+    exchange: "CBOT"
+    sector: "ag"
+    tick_size: 0.0025
+    tick_value: 12.50
+    multiplier: 5000
+    margin_initial: 3300
+    margin_maintenance: 3000
+    trading_hours: "cme_globex"
+    roll_rule: "volume"
+    roll_offset_days: 7
+    expiration_months: [1,3,5,7,8,9,11]
+    continuous_symbol: "ZS1!"
+    timezone: "America/Chicago"
+
+  ZW:
+    name: "Wheat (Chicago SRW)"
+    exchange: "CBOT"
+    sector: "ag"
+    tick_size: 0.0025
+    tick_value: 12.50
+    multiplier: 5000
+    margin_initial: 1650
+    margin_maintenance: 1500
+    trading_hours: "cme_globex"
+    roll_rule: "volume"
+    roll_offset_days: 7
+    expiration_months: [3,5,7,9,12]
+    continuous_symbol: "ZW1!"
+    timezone: "America/Chicago"
+
+  # Livestock Futures (CME)
+  LE:
+    name: "Live Cattle"
+    exchange: "CME"
+    sector: "livestock"
+    tick_size: 0.00025
+    tick_value: 10.00
+    multiplier: 40000
+    margin_initial: 2200
+    margin_maintenance: 2000
+    trading_hours: "cme_globex"
+    roll_rule: "volume"
+    roll_offset_days: 7
+    expiration_months: [2,4,6,8,10,12]
+    continuous_symbol: "LE1!"
+    timezone: "America/Chicago"
+
+  HE:
+    name: "Lean Hogs"
+    exchange: "CME"
+    sector: "livestock"
+    tick_size: 0.00025
+    tick_value: 10.00
+    multiplier: 40000
+    margin_initial: 1650
+    margin_maintenance: 1500
+    trading_hours: "cme_globex"
+    roll_rule: "volume"
+    roll_offset_days: 7
+    expiration_months: [2,4,6,7,8,10,12]
+    continuous_symbol: "HE1!"
+    timezone: "America/Chicago"
+
+# Month code mapping (CME standard)
+month_codes:
+  1: "F"   # January
+  2: "G"   # February
+  3: "H"   # March
+  4: "J"   # April
+  5: "K"   # May
+  6: "M"   # June
+  7: "N"   # July
+  8: "Q"   # August
+  9: "U"   # September
+  10: "V"  # October
+  11: "X"  # November
+  12: "Z"  # December
+
+# Contract code format: {SYMBOL}{MONTH_CODE}{YEAR_LAST_DIGIT}
+# Example: ESU24 = E-mini S&P 500 Sep 2024
+# Continuous contracts: ES1! (front month), ES2! (second month), etc.

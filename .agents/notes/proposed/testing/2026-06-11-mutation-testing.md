@@ -1,6 +1,12 @@
 # Agent Note: Mutation testing as the coverage counterweight
 
-Status: proposed
+Status: implemented
+
+Implemented via `stryker.config.json` (scope `packages/util`), `vitest.mutation.config.ts`, the
+`test:mutation` script, and a non-blocking `ci-mutation` gate in `scripts/run-gates.ts`; the
+canonical record is the [quality-gates note](../../implemented/process/2026-06-11-quality-gates.md).
+Scope deviates from the original Plan (util POC instead of llm; an observational gate instead of
+nightly) but follows the repo's non-blocking-observational gate pattern.
 
 English | [中文](2026-06-11-mutation-testing.zh.md)
 

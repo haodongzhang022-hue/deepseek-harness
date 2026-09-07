@@ -20,6 +20,8 @@ export type Uuid = `${string}-${string}-${string}-${string}-${string}`
 export function bytesToBase64(data: Uint8Array): string {
   let binary = ''
   const chunk = 0x8000
+  // Stryker disable next-line EqualityOperator -- equivalent mutant: a final iteration at
+  // offset === data.length slices an empty range, String.fromCharCode() yields '' and the btoa output is unchanged.
   for (let offset = 0; offset < data.length; offset += chunk) {
     binary += String.fromCharCode(...data.subarray(offset, offset + chunk))
   }

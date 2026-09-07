@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "experience-store"
+version = "0.3.0"
+description = "经验蒸馏入库/检索/镜像：Case→经验→SQLite(FTS5)→镜像，纯标准库，可独立开源复用"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+keywords = ["experience", "sqlite", "fts5", "case", "skill", "self-evolution"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+[project.scripts]
+experience-store = "experience_store.cli:main"
+
+[tool.setuptools]
+packages = ["experience_store"]

@@ -1,0 +1,10 @@
+# User-owned patch template. Copy into a user preset; do not edit a shipped preset.
+- insert:
+    - id: release-control-mcp
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: releasecontrol
+        transport: stdio
+        command: python
+        args: [-m, release_control.mcp_server]
+        cwd: !!js process.cwd()

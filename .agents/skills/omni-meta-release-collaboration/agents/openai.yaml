@@ -1,0 +1,4 @@
+interface:
+  display_name: "omni-meta Release Collaboration"
+  short_description: "Cross-market V3 release queue mode (port ring + MCP + multi-AI gate)"
+  default_prompt: "Use $omni-meta-release-collaboration before writing code or submitting work into the omni-meta shared release queue."

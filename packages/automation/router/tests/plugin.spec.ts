@@ -44,7 +44,7 @@ describe('automation-router daemon plugin', () => {
 
     // Awaiting the mount itself joins async apply completion (fiber.ready does not).
     const fiber = await ctx.plugin(daemon, {
-      gates: [{ name: 'itg-8008', serverName: 'releasecontrol', ledgerPath }],
+      gates: [{ name: 'itg-8008', serverName: 'releasecontrol', ledgerPath, pollIntervalMs: 60_000, transport: 'log' }],
     })
 
     const errs = logs.filter(l => l.startsWith('error'))
@@ -56,7 +56,7 @@ describe('automation-router daemon plugin', () => {
       expect(existsSync(ledgerPath)).toBe(true)
     })
     const raw = JSON.parse(readFileSync(ledgerPath, 'utf8')) as { items: Record<string, { lastState: string }> }
-    expect(raw.items['RC-77'].lastState).toBe('rejected')
+    expect(raw.items['RC-77']?.lastState).toBe('rejected')
 
     // Disposal clears the poll timer.
     await fiber.dispose()
@@ -75,11 +75,11 @@ describe('automation-router daemon plugin', () => {
     ctx.provide('tools', { execute })
 
     await ctx.plugin(daemon, {
-      gates: [{ name: 'stg-8027', serverName: 'releasecontrol', ledgerPath, gate: 'staging-8027' }],
+      gates: [{ name: 'stg-8027', serverName: 'releasecontrol', ledgerPath, gate: 'staging-8027', pollIntervalMs: 60_000, transport: 'log' }],
     })
 
     const raw = JSON.parse(readFileSync(ledgerPath, 'utf8')) as { items: Record<string, { lastState: string }> }
-    expect(raw.items['RC-50'].lastState).toBe('rejected')
+    expect(raw.items['RC-50']?.lastState).toBe('rejected')
   })
 
   it('serves the http-rest channel with no tools service present in the host', async () => {
@@ -103,7 +103,7 @@ describe('automation-router daemon plugin', () => {
       // Deliberately no tools service: the http channel must not need one.
 
       await ctx.plugin(daemon, {
-        gates: [{ name: 'itg-http', serverName: 'unused', ledgerPath, channel: 'http-rest', httpBaseUrl: 'http://gate.test' }],
+        gates: [{ name: 'itg-http', serverName: 'unused', ledgerPath, channel: 'http-rest', httpBaseUrl: 'http://gate.test', pollIntervalMs: 60_000, transport: 'log' }],
       })
 
       await vi.waitFor(() => {
@@ -111,7 +111,7 @@ describe('automation-router daemon plugin', () => {
         expect(existsSync(ledgerPath)).toBe(true)
       })
       const raw = JSON.parse(readFileSync(ledgerPath, 'utf8')) as { items: Record<string, { lastState: string }> }
-      expect(raw.items['RC-88'].lastState).toBe('rejected')
+      expect(raw.items['RC-88']?.lastState).toBe('rejected')
     } finally {
       globalThis.fetch = originalFetch
     }
@@ -122,7 +122,7 @@ describe('automation-router daemon plugin', () => {
     ctx.provide('logger', { info(): void {}, warn(): void {}, error(): void {}, debug(): void {}, success(): void {} })
 
     await expect(ctx.plugin(daemon, {
-      gates: [{ name: 'no-tools', serverName: 'releasecontrol', ledgerPath: join(mkdtempSync(join(tmpdir(), 'router-missing-')), 'l.json') }],
+      gates: [{ name: 'no-tools', serverName: 'releasecontrol', ledgerPath: join(mkdtempSync(join(tmpdir(), 'router-missing-')), 'l.json'), pollIntervalMs: 60_000, transport: 'log' }],
     })).rejects.toThrow(/requires the tools service/)
   })
 })

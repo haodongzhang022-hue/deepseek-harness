@@ -1,0 +1,142 @@
+# US Futures Quant System - Global Settings
+# All paths relative to project root unless absolute
+
+project:
+  name: "us-futures"
+  version: "0.1.0"
+  timezone: "America/Chicago"  # CME trading timezone
+  data_root: "./data"          # Local data root (DuckDB, parquet, csv)
+
+# Data source configuration
+data_sources:
+  primary: "local_csv"         # Options: local_csv, polygon, cme_datamine, rithmic
+  fallback: []
+  polygon:
+    api_key: "${POLYGON_API_KEY}"
+    base_url: "https://api.polygon.io"
+    rate_limit: 5              # requests/second
+  cme_datamine:
+    username: "${CME_USERNAME}"
+    password: "${CME_PASSWORD}"
+    base_url: "https://datamine.cmegroup.com"
+  rithmic:
+    host: "${RITHMIC_HOST}"
+    port: ${RITHMIC_PORT}
+    username: "${RITHMIC_USER}"
+    password: "${RITHMIC_PASS}"
+
+# Symbol universe
+universe:
+  core: ["ES", "NQ", "YM", "RTY", "CL", "GC", "SI", "HG", "ZB", "ZN", "ZF", "ZT", "6E", "6J", "6B", "6A", "6C"]
+  extended: ["NG", "RB", "HO", "ZC", "ZS", "ZW", "KE", "ZM", "ZL", "LE", "HE", "GF"]
+  # Filter by liquidity: min_avg_daily_volume, min_open_interest
+
+# Trading sessions (CME Globex + RTH)
+trading_sessions:
+  cme_globex:
+    start: "17:00"    # Previous day 17:00 CT
+    end: "16:00"      # Next day 16:00 CT
+    timezone: "America/Chicago"
+    break_start: "15:00"  # 15:00-17:00 CT maintenance
+    break_end: "17:00"
+  rth:  # Regular Trading Hours (pit session reference)
+    start: "08:30"
+    end: "15:00"
+    timezone: "America/Chicago"
+
+# Data frequency hierarchy
+frequencies:
+  raw: "1min"           # Raw storage resolution
+  modeling: ["5min", "15min", "1H"]  # Model training frequencies
+  regime: ["4H", "1D"]  # Regime detection frequencies
+  # All derived from raw via alignment.py
+
+# Storage
+storage:
+  duckdb:
+    path: "./data/us_futures.duckdb"
+    compression: "zstd"
+    partition_by: "symbol"
+  parquet:
+    path: "./data/parquet"
+    partition_by: ["symbol", "year", "month"]
+  timescaledb:
+    enabled: false
+    host: "localhost"
+    port: 5432
+    database: "us_futures"
+    user: "${TSDB_USER}"
+    password: "${TSDB_PASS}"
+
+# Validation thresholds
+validation:
+  max_gap_minutes: 30          # Max allowed gap in 1min data (outside breaks)
+  max_price_jump_pct: 0.05     # 5% single-bar jump triggers flag
+  max_volume_spike_z: 10       # Volume z-score threshold
+  min_daily_bars: 350          # Expected ~390 bars in RTH, allow some gaps
+  ohlc_consistency: true       # High >= max(O,C), Low <= min(O,C)
+  zero_volume_allowed: false   # Flag zero-volume bars in RTH
+
+# Feature engineering
+features:
+  lookback_windows: [5, 10, 20, 40, 80, 160, 320]  # In bars (at modeling freq)
+  microstructure_windows: [1, 2, 5, 10, 20]        # In 1min bars
+  regime_lookback: 1000        # Bars for regime detection
+  zscore_window: 252           # ~1 year for cross-sectional z-score
+
+# Model training
+model:
+  dl:
+    backbone: "PatchTST"
+    pretrain_epochs: 50
+    finetune_epochs: 20
+    batch_size: 256
+    learning_rate: 3e-4
+    weight_decay: 1e-4
+    context_length: 256        # Bars
+    prediction_horizon: [1, 3, 5, 10, 20]  # Bars ahead
+  rl:
+    algorithm: "SAC"
+    offline_epochs: 100
+    online_steps: 50000
+    buffer_size: 1000000
+    gamma: 0.99
+    tau: 0.005
+
+# Backtesting
+backtest:
+  initial_cash: 1_000_000
+  commission_per_contract: 2.50  # Round-trip
+  slippage_ticks: 1              # Per leg
+  margin_mode: "isolated"        # isolated or cross
+  max_leverage: 10
+  position_sizing: "vol_target"  # vol_target, fixed_fraction, kelly
+  target_annual_vol: 0.15
+
+# Risk management (hard rules, always enforced)
+risk:
+  max_position_per_symbol: 50    # Contracts
+  max_portfolio_margin_pct: 0.8  # 80% of equity
+  daily_loss_limit_pct: 0.03     # 3% daily loss -> halt
+  max_drawdown_pct: 0.10         # 10% max DD -> reduce risk
+  position_holding_limit_hours: 48  # Max hold time (intraday focus)
+  correlation_limit: 0.7         # Max pairwise correlation
+
+# Monitoring
+monitoring:
+  metrics_port: 9090
+  health_check_interval_sec: 30
+  alert_channels: ["log"]        # log, email, slack, pagerduty
+  triggers_file: "./config/triggers.yaml"
+
+# Execution (paper/live)
+execution:
+  mode: "paper"                  # paper, live
+  broker: "ibkr"
+  ibkr:
+    host: "127.0.0.1"
+    port: 4001                   # 4001=paper, 4002=live, 7496=legacy
+    client_id: 1
+    timeout: 30
+  order_refresh_sec: 5
+  max_order_retry: 3

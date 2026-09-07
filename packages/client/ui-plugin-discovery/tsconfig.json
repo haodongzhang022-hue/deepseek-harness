@@ -1,0 +1,37 @@
+{
+  "extends": "tsconfig.base.client.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types",
+    "composite": true,
+    "tsBuildInfoFile": "lib/tsconfig.tsbuildinfo"
+  },
+  "references": [
+    {
+      "path": "../../../api/remotes"
+    },
+    {
+      "path": "../../ui-settings"
+    },
+    {
+      "path": "../../locale"
+    },
+    {
+      "path": "../../ui-slots"
+    },
+    {
+      "path": "../../ui-primitives"
+    },
+    {
+      "path": "../../../runtime-diagnostics/invariants"
+    }
+  ],
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "lib",
+    "node_modules",
+    "tests"
+  ]
+}

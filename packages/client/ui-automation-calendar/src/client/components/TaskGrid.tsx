@@ -26,8 +26,8 @@ export function TaskGrid({ rows, timeRange, granularity, onTaskClick, onCycleGro
           key={row.id}
           row={row}
           timeRange={timeRange}
-          onTaskClick={onTaskClick}
-          onCycleGroupToggle={onCycleGroupToggle}
+          {...(onTaskClick === undefined ? {} : { onTaskClick })}
+          {...(onCycleGroupToggle === undefined ? {} : { onCycleGroupToggle })}
           t={t}
         />
       ))}

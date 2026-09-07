@@ -1,0 +1,116 @@
+# Logging Configuration
+# Uses loguru with JSON formatting for production, pretty for dev
+
+version: 1
+disable_existing_loggers: false
+
+formatters:
+  json:
+    class: pythonjsonlogger.jsonlogger.JsonFormatter
+    format: "%(asctime)s %(name)s %(levelname)s %(message)s %(module)s %(funcName)s %(lineno)d"
+    timestamp: true
+    utc: true
+
+  pretty:
+    format: "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>"
+    colorize: true
+
+handlers:
+  console:
+    class: logging.StreamHandler
+    formatter: pretty
+    stream: ext://sys.stdout
+    level: INFO
+
+  file_json:
+    class: logging.handlers.RotatingFileHandler
+    formatter: json
+    filename: "./logs/us_futures.jsonl"
+    maxBytes: 104857600  # 100MB
+    backupCount: 10
+    encoding: utf-8
+    level: DEBUG
+
+  file_error:
+    class: logging.handlers.RotatingFileHandler
+    formatter: json
+    filename: "./logs/us_futures_error.jsonl"
+    maxBytes: 104857600
+    backupCount: 10
+    encoding: utf-8
+    level: ERROR
+
+  metrics:
+    class: logging.handlers.RotatingFileHandler
+    formatter: json
+    filename: "./logs/metrics.jsonl"
+    maxBytes: 104857600
+    backupCount: 30
+    encoding: utf-8
+    level: INFO
+    filters: ["metrics_only"]
+
+filters:
+  metrics_only:
+    class: us_futures.logging_filters.MetricsFilter
+
+loggers:
+  us_futures:
+    level: DEBUG
+    handlers: [console, file_json, file_error]
+    propagate: false
+
+  us_futures.data:
+    level: DEBUG
+    handlers: [console, file_json, file_error]
+    propagate: false
+
+  us_futures.models:
+    level: DEBUG
+    handlers: [console, file_json, file_error]
+    propagate: false
+
+  us_futures.backtest:
+    level: INFO
+    handlers: [console, file_json, file_error]
+    propagate: false
+
+  us_futures.execution:
+    level: INFO
+    handlers: [console, file_json, file_error]
+    propagate: false
+
+  us_futures.monitoring:
+    level: INFO
+    handlers: [console, file_json, file_error, metrics]
+    propagate: false
+
+  # Third-party loggers
+  numba:
+    level: WARNING
+    handlers: [console, file_json]
+    propagate: false
+
+  torch:
+    level: WARNING
+    handlers: [console, file_json]
+    propagate: false
+
+  lightning:
+    level: INFO
+    handlers: [console, file_json]
+    propagate: false
+
+  vectorbt:
+    level: INFO
+    handlers: [console, file_json]
+    propagate: false
+
+  ib_insync:
+    level: INFO
+    handlers: [console, file_json]
+    propagate: false
+
+root:
+  level: INFO
+  handlers: [console, file_json, file_error]

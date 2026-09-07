@@ -3,6 +3,15 @@
  * @module ui-automation-calendar/client/locales
  */
 
+import type {} from '@deepseek-ai/dsh-client-ui-slots'
+
+declare module '@deepseek-ai/dsh-client-ui-slots' {
+  interface LocaleNamespaceMap {
+    /** The automation calendar dictionary namespace. */
+    calendar: CalendarKey
+  }
+}
+
 /** Locale namespace owned by this package. */
 export const CALENDAR_LOCALE_NS = 'calendar'
 

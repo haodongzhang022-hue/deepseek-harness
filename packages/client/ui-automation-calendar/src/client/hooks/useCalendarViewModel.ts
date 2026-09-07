@@ -55,14 +55,14 @@ export function snapshotToTasks(
       id: `turn-${index}-${timing.startTime}`,
       sessionId,
       startedAt: timing.startTime,
-      endedAt,
+      ...(endedAt === undefined ? {} : { endedAt }),
       lastActivityAt: endedAt ?? now,
       status,
       label: `Turn ${index}`,
       resources: { durationMs },
-      error: lastAgentError !== null && status === 'cancelled'
-        ? { code: 'AGENT_ERROR', message: lastAgentError, timestamp: now }
-        : undefined,
+      ...(lastAgentError !== null && status === 'cancelled'
+        ? { error: { code: 'AGENT_ERROR', message: lastAgentError, timestamp: now } }
+        : {}),
     })
   }
 
@@ -79,9 +79,9 @@ function aggregateRowResources(entries: readonly AutomationTaskEntry[]) {
   }
   return {
     durationMs,
-    tokenUsage: totalTokens > 0
-      ? { input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0, total: totalTokens }
-      : undefined,
+    ...(totalTokens > 0
+      ? { tokenUsage: { input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0, total: totalTokens } }
+      : {}),
   }
 }
 
@@ -97,7 +97,7 @@ function toEntry(task: AutomationTaskEntry, granularity: GranularityId, now: num
       color: STATUS_COLORS[task.status],
       opacity: 1,
       borderWidth: task.error !== undefined ? 2 : 0,
-      borderColor: task.error !== undefined ? STATUS_COLORS.failed : undefined,
+      ...(task.error !== undefined ? { borderColor: STATUS_COLORS.failed } : {}),
     },
   }
 }
@@ -138,7 +138,7 @@ export function groupTasksIntoRows(
       entries: cycle.tasks.map(t => toEntry(t, granularity, now)),
       rowSummary: aggregateRowResources(cycle.tasks),
       expanded: isExpanded,
-      children: isExpanded ? childRows : undefined,
+      ...(isExpanded ? { children: childRows } : {}),
       cycleLevel: cycle.mappedGranularity,
     })
 

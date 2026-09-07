@@ -100,12 +100,12 @@ describe('toGateItems', () => {
     const [viaFeedback] = toGateItems([
       { issue_id: 'A', status: 'rejected_8008', feedback: [{ reason: 'feedback原因' }] },
     ])
-    expect(viaFeedback.detail).toBe('feedback原因')
+    expect(viaFeedback!.detail).toBe('feedback原因')
 
     const [viaFlat] = toGateItems([
       { issue_id: 'B', status: 'rejected_8008', rejection_reason: 'flat原因' },
     ])
-    expect(viaFlat.detail).toBe('flat原因')
+    expect(viaFlat!.detail).toBe('flat原因')
   })
 
   it('drops records without an issue id', () => {
@@ -127,7 +127,7 @@ describe('ReleaseControlGateAdapter', () => {
 
     const items = await adapter.listItems()
     expect(items).toHaveLength(1)
-    expect(items[0].id).toBe('RC-2')
+    expect(items[0]?.id).toBe('RC-2')
     expect(calls.every(c => c.name === 'list_release_state')).toBe(true)
   })
 

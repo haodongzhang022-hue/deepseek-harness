@@ -216,6 +216,24 @@ describe('renderToolsSdk', () => {
     expect(renderToolsSdk([constrained])).toContain('tools.bash({ command: \'pwd\' })')
   })
 
+  it('renders a generic run_code example naming a real declared tool when no bash binds', () => {
+    // Without `bash` the model still gets a concrete call envelope instead of
+    // only abstract prose. The named tool must be one that is actually declared:
+    // quoted access for exotic names, a bare identifier otherwise.
+    expect(renderToolsSdk([exotic])).toContain('tools["my-mcp.tool"](')
+
+    const todoWrite: ToolSdkSchema = {
+      name: 'todo_write',
+      description: 'Track work.',
+      parameters: parameterSchemaSpecToJsonSchema({}) as unknown as Record<string, unknown>,
+      output: { type: 'object', additionalProperties: true },
+    }
+    const text = renderToolsSdk([todoWrite])
+    expect(text).toContain('tools.todo_write(')
+    expect(text).not.toContain('tools.bash(')
+    expect(text).toContain('When no separate `bash` binding is supplied')
+  })
+
   it('is deterministic: same tool set, byte-identical text regardless of input order', () => {
     expect(renderToolsSdk([bash, exotic])).toBe(renderToolsSdk([exotic, bash]))
     // Equal names sort stably (the comparator's equal arm).

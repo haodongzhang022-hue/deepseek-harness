@@ -1,6 +1,5 @@
 /** Registers the target-neutral Conversation assembly, shell, input, and docks. */
 import type { Context } from '@deepseek-ai/cordis'
-import z from '@deepseek-ai/schemastery'
 import type { ISessions } from '@deepseek-ai/dsh-api-session-controller/client'
 import { createSnapshotStore, type BoundActions } from '@deepseek-ai/dsh-client-store'
 import { resolveSlotLabel } from '@deepseek-ai/dsh-client-ui-slots'
@@ -14,10 +13,10 @@ import { UiConversation } from './conversation/assembly.ts'
 import type { ViewTab } from './contract/views.ts'
 import type {
   ComposerBarInjected, ConversationInjected, ConversationSessionHeaderInjected,
-  ConversationSessionInjected, DraftFileUploads,
+  ConversationSessionInjected,
 } from './contract/slots.ts'
 import type { InputNotice } from './contract/input.ts'
-import { createConversationStore, readConversationViewPreference } from './stores.ts'
+import { createConversationStore } from './stores.ts'
 import { ConversationController, UnsupportedImageMediaTypeError } from './service.ts'
 import type { IConversation } from './service.ts'
 import { ComposerBlockRegistry } from './input/blocks.ts'
@@ -30,8 +29,8 @@ import type { EnterBehaviorRowInjected } from './settings/EnterBehaviorRow.tsx'
 import { ConversationRoot } from './skeleton/ConversationRoot.tsx'
 import { ConversationSession, ConversationSessionHeader } from './skeleton/ConversationSession.tsx'
 import { InputBar } from './skeleton/InputBar.tsx'
+import { createAgentDirectorySource } from './input/editor/at-mention-source.ts'
 import { todoDockEntry } from './skeleton/TodoPanel.tsx'
-import { resolveActiveView } from './view-selection.ts'
 import { en, NS, zh, type ConversationKey } from './locales.ts'
 import { CONVERSATION_SETTINGS_NAMESPACE, type ConversationSettings } from '../submission-settings.ts'
 
@@ -44,19 +43,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 
 /** Services required by the Conversation plugin. */
 export const inject = [
-  'slots', 'sessions', 'fileUpload', 'uiSession', 'uiWorkspace', 'locale', 'settingsScope',
+  'slots', 'sessions', 'uiSession', 'uiWorkspace', 'locale', 'settingsScope',
 ]
-
-/** Conversation runtime configuration. */
-export interface Config {
-  /** Maximum generic-file uploads allowed to run concurrently in browser Workers. */
-  maxConcurrentFileUploads?: number
-}
-
-/** Validated Conversation runtime configuration. */
-export const Config: z<Config> = z.object({
-  maxConcurrentFileUploads: z.natural().min(1).default(2),
-})
 
 // Stable no-session sources keep the renderer's observable-hook cache and
 // hook order unchanged across current-Session transitions.
@@ -75,11 +63,6 @@ const ABSENT_LEXICON = {
 }
 const ABSENT_MENU_LAUNCHER = {
   getSnapshot: (): string | null => null,
-  subscribe: () => () => {},
-}
-const EMPTY_FILE_UPLOADS: DraftFileUploads = {}
-const ABSENT_FILE_UPLOADS = {
-  getSnapshot: () => EMPTY_FILE_UPLOADS,
   subscribe: () => () => {},
 }
 
@@ -111,17 +94,30 @@ function concreteConversation(ctx: Context): ConversationController {
  * Mount the Conversation core and target-neutral presentation.
  * @param ctx - Client root context.
  */
-export function apply(ctx: Context, config: Config = Config({})): void {
+export function apply(ctx: Context): void {
   const sessions = ctx.sessions
   const slots = ctx.slots
-  // Schemastery's field default is materialized before Cordis calls apply.
-  const maxConcurrentFileUploads = config.maxConcurrentFileUploads as number
   const workspaceNavigation = ctx.get('uiWorkspace') as unknown as WorkspaceNavigation
   const uiConversation = new UiConversation(ctx, sessions)
 
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-conversation: dictionaries')
   const t = ctx.locale.bind(NS)
   const conversationStore = createConversationStore()
+
+  // '@ agent-directory' trigger source: the architect-team directory renders
+  // as its own category above the built-in reference (files/sessions) group.
+  // Guarded: hosts without the input-trigger pipeline simply have no menu.
+  const inputTriggers = ctx.get('inputTriggers') as
+    | { registerSource(source: unknown): () => void }
+    | undefined
+  if (inputTriggers !== undefined) {
+    ctx.effect(
+      () => inputTriggers.registerSource(createAgentDirectorySource(
+        (key) => t(key as never) as unknown as string,
+      )),
+      'ui-conversation: @ agent-directory source',
+    )
+  }
   const submissionPolicy = new ComposerSubmissionPolicy(
     ctx.settingsScope.bind<ConversationSettings>({ namespace: CONVERSATION_SETTINGS_NAMESPACE }),
   )
@@ -149,47 +145,25 @@ export function apply(ctx: Context, config: Config = Config({})): void {
     }
     return tabs
   }
-  const activateView = (sessionId: SessionId, preferred: string | null): void => {
-    const active = resolveActiveView(viewTabs(), preferred)
-    if (active !== undefined) uiConversation.binding(sessionId).activate(active.id)
-  }
-  const restoreView = (sessionId: SessionId): void => {
-    activateView(sessionId, readConversationViewPreference(sessionId))
-  }
-  const restoreCurrentView = (): void => {
-    const sessionId = sessions.list.getSnapshot().current
-    if (sessionId !== undefined && sessions.binding(sessionId) !== undefined) {
-      restoreView(sessionId)
-    }
-  }
   const conversationViews = createSnapshotStore<readonly ViewTab[]>(viewTabs())
   const refreshViews = (): void => {
     const current = conversationViews.getSnapshot()
     const next = viewTabs()
-    const unchanged = current.length === next.length
+    if (current.length === next.length
       && current.every((tab, index) => {
         const candidate = next.at(index)
         return candidate !== undefined && tab.id === candidate.id && tab.label === candidate.label
-      })
-    if (!unchanged) conversationViews.set(next)
-    restoreCurrentView()
+      })) return
+    conversationViews.set(next)
   }
   ctx.effect(() => {
-    let currentSessionId = sessions.list.getSnapshot().current
     const disposeViews = slots.subscribe('conversation.view', refreshViews)
     const disposeLocale = ctx.locale.subscribe(refreshViews)
-    const disposeCurrent = sessions.list.subscribe(() => {
-      const nextSessionId = sessions.list.getSnapshot().current
-      if (nextSessionId === currentSessionId) return
-      currentSessionId = nextSessionId
-      restoreCurrentView()
-    })
     return () => {
-      disposeCurrent()
       disposeLocale()
       disposeViews()
     }
-  }, 'ui-conversation: View selection')
+  }, 'ui-conversation: View roster')
 
   const inputHub = new InputHub(ctx, t)
   const composerBlocks = new ComposerBlockRegistry()
@@ -201,11 +175,9 @@ export function apply(ctx: Context, config: Config = Config({})): void {
     props: ['inputActions'],
     resolve: (binding) => {
       const shell = inputHub.shellFor(binding)
-      const conversation = uiConversation.binding(binding)
-      restoreView(binding.sessionId)
       return {
         hooks: {
-          conversation: conversation.snapshot,
+          conversation: uiConversation.binding(binding).snapshot,
           input: shell.state,
         },
         props: { inputActions: shell.actions },
@@ -221,7 +193,11 @@ export function apply(ctx: Context, config: Config = Config({})): void {
       'conversation.session.header': { kind: 'single', scope: 'session' },
       'conversation.composer': { kind: 'chain', scope: 'session' },
       'conversation.composer.bar': { kind: 'single', scope: 'session-maybe' },
+      'conversation.input.overlay': { kind: 'list', scope: 'session' },
       'conversation.input.dock': { kind: 'list', scope: 'session' },
+      'conversation.composer.dock': { kind: 'list', scope: 'session' },
+      'conversation.input.left': { kind: 'list', scope: 'session' },
+      'conversation.input.right': { kind: 'list', scope: 'session' },
       'conversation.hero.brand.mark': { kind: 'single', scope: 'root' },
       'conversation.hero.workspace': { kind: 'single', scope: 'root' },
       'conversation.hero.agentPreset': { kind: 'single', scope: 'root' },
@@ -235,19 +211,15 @@ export function apply(ctx: Context, config: Config = Config({})): void {
         if (sessionId !== undefined && nextId !== sessionId) {
           const from = inputHub.shell(sessionId)
           const draft = from.snapshot.draft
-          const attachmentIds = from.snapshot.attachmentIds
+          const imageIds = from.snapshot.imageIds
           const next = inputHub.shell(nextId)
-          if (attachmentIds.length === 0 || next.addAttachments(attachmentIds)) {
-            if (sessions.binding(nextId) === undefined) {
-              throw new Error(`ui-conversation: session "${nextId}" resolved no binding`)
-            }
-            concreteConversation(ctx).rebindDraftFiles(nextId, attachmentIds)
+          if (imageIds.length === 0 || next.addImages(imageIds)) {
             if (draft !== '') {
               next.setDraft(draft)
               from.setDraft('')
             }
-            if (attachmentIds.length > 0) {
-              for (const id of attachmentIds) from.removeAttachment(id)
+            if (imageIds.length > 0) {
+              for (const id of imageIds) from.removeImage(id)
             }
           }
         }
@@ -262,13 +234,9 @@ export function apply(ctx: Context, config: Config = Config({})): void {
       'conversation.view': { kind: 'list', scope: 'session' },
     },
     store: conversationStore,
-    inject: (sessionId: SessionId, actions: BoundActions<typeof conversationStore>): ConversationSessionInjected => ({
+    inject: (sessionId: SessionId, _actions: BoundActions<typeof conversationStore>): ConversationSessionInjected => ({
       hooks: { conversationViews },
       bindDraftMirror: write => inputHub.shell(sessionId).bindMirror(write),
-      openView: (view, focus) => {
-        activateView(sessionId, view)
-        actions.openView(view, focus)
-      },
     }),
   }, ConversationSession)
 
@@ -281,13 +249,9 @@ export function apply(ctx: Context, config: Config = Config({})): void {
       'conversation.session.header.utilities': { kind: 'list', scope: 'session' },
     },
     store: conversationStore,
-    inject: (sessionId: SessionId, actions: BoundActions<typeof conversationStore>): ConversationSessionHeaderInjected => ({
+    inject: (): ConversationSessionHeaderInjected => ({
       hooks: { conversationViews },
       open: (id) => { sessions.open(id) },
-      selectView: (view) => {
-        activateView(sessionId, view)
-        actions.setView(view)
-      },
     }),
   }, ConversationSessionHeader)
 
@@ -296,28 +260,22 @@ export function apply(ctx: Context, config: Config = Config({})): void {
     locale: NS,
     children: {
       'conversation.input.attachments': { kind: 'single', scope: 'session-maybe' },
-      'conversation.input.overlay': { kind: 'list', scope: 'session' },
-      'conversation.input.left': { kind: 'list', scope: 'session' },
       'conversation.input.plan': { kind: 'single', scope: 'session' },
-      'conversation.input.right': { kind: 'list', scope: 'session' },
       'conversation.input.model': { kind: 'single', scope: 'session' },
-      'conversation.composer.dock': { kind: 'list', scope: 'session' },
     },
     inject: (sessionId: SessionId | undefined): ComposerBarInjected => {
       if (sessionId === undefined) {
         return {
           keyboard: undefined,
-          addFiles: undefined,
-          removeAttachment: undefined,
-          resolveDraftAttachments: undefined,
-          retryFileUpload: undefined,
+          addImages: undefined,
+          removeImage: undefined,
+          draftImages: undefined,
           resolveSubmitMode: (running, gesture, steeringAvailable) =>
             submissionPolicy.resolve(running, gesture, steeringAvailable),
           toggleCommandMenu: undefined,
           stop: undefined,
           command: undefined,
           hooks: {
-            fileUploads: ABSENT_FILE_UPLOADS,
             notices: ABSENT_NOTICES,
             lexicon: ABSENT_LEXICON,
             menuLauncher: ABSENT_MENU_LAUNCHER,
@@ -329,12 +287,11 @@ export function apply(ctx: Context, config: Config = Config({})): void {
       const inputTriggers = inputHub.inputTriggers(sessionId)
       return {
         keyboard: shell,
-        addFiles: (files) => {
-          if (sessions.binding(sessionId) === undefined) return t('file.sessionUnavailable')
+        addImages: (files) => {
           try {
-            const drafts = conversation.createDrafts(sessionId, files)
-            if (!shell.addAttachments(drafts.map(draft => draft.id))) {
-              conversation.releaseDraftAttachments(drafts)
+            const images = conversation.createDraftImages(files)
+            if (!shell.addImages(images.map(image => image.id))) {
+              conversation.releaseDraftImages(images)
             }
             return null
           } catch (error: unknown) {
@@ -342,13 +299,11 @@ export function apply(ctx: Context, config: Config = Config({})): void {
             return error instanceof Error ? error.message : String(error)
           }
         },
-        removeAttachment: (id) => {
-          if (shell.removeAttachment(id)) conversation.releaseDraftAttachment(id)
+        removeImage: (id) => {
+          conversation.releaseDraftImage(id)
+          shell.removeImage(id)
         },
-        resolveDraftAttachments: ids => conversation.resolveDraftAttachments(ids),
-        retryFileUpload: (id) => {
-          if (sessions.binding(sessionId) !== undefined) conversation.retryFileUpload(sessionId, id)
-        },
+        draftImages: ids => conversation.draftImages(ids),
         resolveSubmitMode: (running, gesture, steeringAvailable) =>
           submissionPolicy.resolve(running, gesture, steeringAvailable),
         toggleCommandMenu: inputTriggers === undefined
@@ -376,7 +331,6 @@ export function apply(ctx: Context, config: Config = Config({})): void {
           return result.ok && result.value.matched
         },
         hooks: {
-          fileUploads: conversation.fileUploads,
           notices: shell.notices,
           lexicon: shell.lexicon,
           menuLauncher: inputTriggers?.launcher ?? ABSENT_MENU_LAUNCHER,
@@ -392,11 +346,7 @@ export function apply(ctx: Context, config: Config = Config({})): void {
     yield registerComposerBar()
   })
 
-  ctx.plugin(ConversationController, {
-    input: inputHub,
-    blocks: composerBlocks,
-    maxConcurrentFileUploads,
-  })
+  ctx.plugin(ConversationController, { input: inputHub, blocks: composerBlocks })
   ctx.plugin(todoDockEntry)
   ctx.plugin(queueDockEntry)
 }

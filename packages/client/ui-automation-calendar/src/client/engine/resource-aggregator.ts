@@ -67,7 +67,7 @@ export function computeDensityBuckets(
     stuckTasks: 0,
     resourceIntensity: Math.min(1, (bucket.totalTokens / maxTokens + bucket.totalDurationMs / maxDuration) / 2),
     tokenUsage: bucket.totalTokens,
-    cpuUsage: bucket.avgCpuPercent,
+    ...(bucket.avgCpuPercent === undefined ? {} : { cpuUsage: bucket.avgCpuPercent }),
   }))
 }
 
@@ -87,12 +87,12 @@ export function computeCalendarSummary(
     stuckTasks: tasks.filter(t => t.status === 'stuck').length,
     totalTokens: tasks.reduce((sum, t) => sum + (t.resources.tokenUsage?.total ?? 0), 0),
     totalDurationMs: tasks.reduce((sum, t) => sum + t.resources.durationMs, 0),
-    averageCpuPercent: cpuTasks.length > 0
-      ? cpuTasks.reduce((sum, t) => sum + (t.resources.cpu?.averagePercent ?? 0), 0) / cpuTasks.length
-      : undefined,
-    peakCpuPercent: cpuTasks.length > 0
-      ? Math.max(...cpuTasks.map(t => t.resources.cpu?.peakPercent ?? 0))
-      : undefined,
+    ...(cpuTasks.length > 0
+      ? {
+        averageCpuPercent: cpuTasks.reduce((sum, t) => sum + (t.resources.cpu?.averagePercent ?? 0), 0) / cpuTasks.length,
+        peakCpuPercent: Math.max(...cpuTasks.map(t => t.resources.cpu?.peakPercent ?? 0)),
+      }
+      : {}),
     density: computeDensityBuckets(tasks, timeRange, granularity),
   }
 }

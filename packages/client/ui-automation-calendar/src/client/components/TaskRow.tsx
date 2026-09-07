@@ -60,8 +60,8 @@ export function TaskRow({ row, timeRange, depth = 0, onTaskClick, onCycleGroupTo
           row={child}
           timeRange={timeRange}
           depth={depth + 1}
-          onTaskClick={onTaskClick}
-          onCycleGroupToggle={onCycleGroupToggle}
+          {...(onTaskClick === undefined ? {} : { onTaskClick })}
+          {...(onCycleGroupToggle === undefined ? {} : { onCycleGroupToggle })}
           t={t}
         />
       ))}

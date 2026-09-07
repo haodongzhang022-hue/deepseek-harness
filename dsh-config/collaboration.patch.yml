@@ -1,0 +1,10 @@
+# Capability integration overlay — loads the project-owned plugin from this
+# checkout. The Web profile has the same row in its user-owned patch layer.
+# Apply with:
+#   pnpm dsh --profile headless --patch dsh-config/collaboration.patch.yml --dump-config
+# (swap `--dump-config` for a task to boot for real; needs DEEPSEEK_API_KEY)
+- insert:
+    - id: capability-configs
+      name: 'file:///E:/1shuju/1gitgengxin/deepseek-harness/dsh-local-plugins/capability-loader.ts'
+      config:
+        root: 'E:/1shuju/1gitgengxin/deepseek-harness'

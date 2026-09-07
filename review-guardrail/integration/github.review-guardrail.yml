@@ -1,0 +1,59 @@
+name: review-guardrail
+
+# 把"护栏"接进 CI，而非靠人记：任何 PR 提交都自动跑信号灯 + 行级评审 + 合并门禁。
+# 复制本文件到目标仓库 .github/workflows/ 即可接入；核心仍在本模块，各处只写一层薄接入。
+
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review]
+  pull_request_review:
+    types: [submitted]
+
+jobs:
+  guardrail:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # 拿到 base.sha 才能算区间 diff
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      # 1) 信号灯断言：任何提交先跑护栏脚本，红灯即阻塞，不放行后续评审/合并
+      - name: 信号灯断言
+        id: asserts
+        env:
+          GUARDRAIL_CONFIG: review-guardrail/guardrail.yml
+        run: |
+          python -m review_guardrail.cli asserts || exit 3
+
+      # 2) 行级评审：llm 路线用 dsh + DEEPSEEK_API_KEY 跑真实评审
+      #    hybrid/static 同样走本模块，只改 guardrail.yml 的 review.route
+      - name: 行级自动评审
+        id: review
+        env:
+          GUARDRAIL_CONFIG: review-guardrail/guardrail.yml
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          DSH_REVIEW_CMD: dsh
+        run: |
+          python -m review_guardrail.cli review \
+            --repo "$GITHUB_WORKSPACE" \
+            --base "${{ github.event.pull_request.base.sha }}" \
+            --head "${{ github.event.pull_request.head.sha }}" \
+            --format json --out review.json || echo "::notice::评审未通过，见 review.json"
+
+      # 3) 合并门禁：mergeable 只代表"能合并"，这里再校验 approved（verdict=passed）
+      #    未通过就设 required check 为 fail，配合分支保护拦截带病合并
+      - name: 合并门禁
+        env:
+          GUARDRAIL_CONFIG: review-guardrail/guardrail.yml
+        run: |
+          python -m review_guardrail.cli gate --repo "$GITHUB_WORKSPACE" \
+            --base "${{ github.event.pull_request.base.sha }}" \
+            --head "${{ github.event.pull_request.head.sha }}" || true

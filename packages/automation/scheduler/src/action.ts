@@ -4,7 +4,7 @@
  * @module ui-automation-scheduler/action
  */
 
-import { spawn } from 'node:child_process'
+import { spawn, type ChildProcess } from 'node:child_process'
 
 /** Outcome of one fire; the journal line carries it verbatim. */
 export interface ActionResult {
@@ -29,11 +29,18 @@ export class ExecRunner implements ActionRunner {
 
   async run(): Promise<ActionResult> {
     return new Promise((resolve) => {
-      const [file, ...rest] = splitCommand(this.options.command)
-      const child = spawn(file, [...rest, ...this.options.args ?? []], {
-        cwd: this.options.cwd === undefined || this.options.cwd === '' ? undefined : this.options.cwd,
+      const parts = splitCommand(this.options.command)
+      const file = parts[0]
+      if (file === undefined) {
+        resolve({ ok: false, detail: 'empty command' })
+        return
+      }
+      const child: ChildProcess = spawn(file, [...parts.slice(1), ...this.options.args ?? []], {
         stdio: 'ignore',
         signal: AbortSignal.timeout(this.options.timeoutMs),
+        ...(this.options.cwd === undefined || this.options.cwd === '' ? {} : { cwd: this.options.cwd }),
+        // Headless daemon discipline: never allocate a visible console on Windows.
+        windowsHide: true,
       })
       child.on('error', error => resolve({ ok: false, detail: error.message }))
       child.on('exit', (code, signalName) => {
@@ -59,7 +66,7 @@ export class HttpRunner implements ActionRunner {
       const response = await fetch(this.options.url, {
         method: this.options.method,
         headers: { 'content-type': 'application/json' },
-        body: this.options.method === 'GET' || this.options.body === undefined ? undefined : this.options.body,
+        ...(this.options.method === 'GET' || this.options.body === undefined ? {} : { body: this.options.body }),
         signal: AbortSignal.timeout(this.options.timeoutMs),
       })
       const snippet = (await response.text()).slice(0, 200)

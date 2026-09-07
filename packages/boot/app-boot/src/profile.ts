@@ -56,6 +56,14 @@ export interface DshBundleManifest {
 export interface DshProfileManifest {
   /** Ordered bundle layer list (package names). */
   bundles?: string[]
+  /**
+   * Strict admission allow-list. When present, only bundles listed here load;
+   * every other `bundles` entry is refused at the admission gate with no
+   * ability to affect boot. Opt-in: absent means `bundles` itself is admitted
+   * by default, and only gate failures (unresolvable, not a dsh bundle, or a
+   * broken patch layer) are quarantined.
+   */
+  whitelist?: string[]
   /** Whether user patch files reload while this profile remains active. */
   patchReload?: ProfilePatchReload
 }
@@ -102,14 +110,28 @@ export interface ProfileLayer {
   patches: PatchOptions[]
 }
 
+/** A bundle refused by the admission gate; never mounted, never crashes boot. */
+export interface QuarantinedBundle {
+  /** The bundle's package name, as listed in `dsh.profile.bundles`. */
+  packageName: string
+  /** Ready-to-report reason naming why the bundle was refused and what to do. */
+  message: string
+}
+
 /** A loaded profile: resolved bundle layers plus the user's own patch layer. */
 export interface Profile {
   /** The profile name (its directory basename). */
   name: string
   /** Absolute profile directory. */
   dir: string
-  /** Bundle layers in `dsh.profile.bundles` order. */
+  /** Bundle layers in `dsh.profile.bundles` order that passed admission. */
   layers: ProfileLayer[]
+  /**
+   * Bundle layers in `dsh.profile.bundles` order that the admission gate
+   * refused (not whitelisted, unresolved, not a dsh bundle, or broken). The
+   * system still boots without them.
+   */
+  quarantined: QuarantinedBundle[]
   /** Absolute path of the profile's own patch file. */
   patchPath: string
   /** The profile's own patches; empty when the file is absent. */
@@ -789,22 +811,39 @@ export function resolveBundleDir(
 }
 
 /**
+ * Record a refused bundle and report it through the admission warn sink so the
+ * boot layer survives while still surfacing exactly what was quarantined.
+ */
+function quarantine(
+  quarantined: QuarantinedBundle[], warn: (message: string) => void, binName: string,
+  packageName: string, message: string,
+): void {
+  quarantined.push({ packageName, message })
+  warn(`${binName}: ${message}`)
+}
+
+/**
  * Load a profile: resolve every `dsh.profile.bundles` entry to its patch
- * layer and parse the profile's own patch file. A listed bundle without a
- * `dsh.bundle` manifest fails loud — naming a bundle-less package as a layer
- * is a misconfiguration, not "no patches".
+ * layer and parse the profile's own patch file. Bundle admission is gated so
+ * an unqualified layer never takes down the system: a strict
+ * `dsh.profile.whitelist` (when present) refuses unlisted bundles outright,
+ * and any gate failure — an unresolvable package, a package with no
+ * `dsh.bundle` manifest, or a broken patch layer — quarantines that one
+ * bundle with a warning while every other layer still boots.
  * @param binName - the diagnostic prefix on thrown errors.
  * @param name - the profile name.
  * @param installAnchor - absolute path of the dsh app's package.json (first resolution anchor).
  * @param home - the Harness home; defaults to {@link resolveDshHome}.
  * @param options - `userLayer: false` skips reading `cordis.patch.yml`, so a
  * bundles-only consumer (`--dump-default-config`, a recovery diagnostic)
- * cannot fail on a broken user layer.
+ * cannot fail on a broken user layer. `warn` receives each quarantined bundle's
+ * message; it defaults to silent (the returned `quarantined` list always names
+ * them for the caller to report or fail-loud).
  * @returns the loaded profile (empty `patches` when the user layer is skipped).
  */
 export function loadProfile(
   binName: string, name: string, installAnchor: string, home: string = resolveDshHome(),
-  options: { userLayer?: boolean } = {},
+  options: { userLayer?: boolean; warn?: (message: string) => void } = {},
 ): Profile {
   const dir = resolveProfileDir(name, home)
   if (!existsSync(join(dir, 'package.json'))) {
@@ -819,6 +858,7 @@ export function loadProfile(
   const manifest = normalizeShippedProfile(name, dir, readProfileManifest(binName, dir))
   // A hand-written profile manifest may omit the dsh section entirely.
   const bundles = manifest.dsh?.profile?.bundles ?? []
+  const whitelist = manifest.dsh?.profile?.whitelist
   const rawPatchReload: unknown = manifest.dsh?.profile?.patchReload
   if (rawPatchReload !== undefined && rawPatchReload !== 'live' && rawPatchReload !== 'startup') {
     throw new Error(
@@ -826,21 +866,50 @@ export function loadProfile(
     )
   }
   const patchReload = rawPatchReload ?? DEFAULT_PROFILE_PATCH_RELOAD
-  const layers = bundles.map((packageName): ProfileLayer => {
-    const packageDir = resolveBundleDir(binName, packageName, installAnchor, dir)
-    const bundleManifest = JSON.parse(readFileSync(join(packageDir, 'package.json'), 'utf8')) as ProfileManifest
-    const declared = bundleManifest.dsh?.bundle?.patch
-    if (declared === undefined) {
-      throw new Error(`${binName}: profile bundle ${JSON.stringify(packageName)} declares no dsh.bundle in its package.json`)
+  const warn = options.warn ?? (() => {})
+  const layers: ProfileLayer[] = []
+  const quarantined: QuarantinedBundle[] = []
+  for (const packageName of bundles) {
+    if (whitelist !== undefined && !whitelist.includes(packageName)) {
+      quarantine(quarantined, warn, binName, packageName,
+        `profile bundle ${JSON.stringify(packageName)} is not on dsh.profile.whitelist; add it to the whitelist to admit a verified bundle`)
+      continue
     }
-    const patchPath = join(packageDir, declared)
-    return { packageName, packageDir, patchPath, patches: loadOverlayPatches(binName, patchPath) }
-  })
+    let packageDir: string
+    try {
+      packageDir = resolveBundleDir(binName, packageName, installAnchor, dir)
+    } catch (error) {
+      quarantine(quarantined, warn, binName, packageName,
+        `profile bundle ${JSON.stringify(packageName)} failed admission: ${String(error)}`)
+      continue
+    }
+    let patchPath: string
+    try {
+      const bundleManifest = JSON.parse(readFileSync(join(packageDir, 'package.json'), 'utf8')) as ProfileManifest
+      const declared = bundleManifest.dsh?.bundle?.patch
+      if (declared === undefined) {
+        throw new Error(`declares no dsh.bundle in its package.json (an open-source project is not a dsh plugin)`)
+      }
+      patchPath = join(packageDir, declared)
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error)
+      quarantine(quarantined, warn, binName, packageName,
+        `profile bundle ${JSON.stringify(packageName)} failed admission: ${detail}`)
+      continue
+    }
+    try {
+      const patches = loadOverlayPatches(binName, patchPath)
+      layers.push({ packageName, packageDir, patchPath, patches })
+    } catch (error) {
+      quarantine(quarantined, warn, binName, packageName,
+        `profile bundle ${JSON.stringify(packageName)} failed admission: its patch layer ${JSON.stringify(patchPath)} could not load: ${String(error)}`)
+    }
+  }
   const patchPath = join(dir, PROFILE_PATCH_FILENAME)
   const patches = options.userLayer !== false && existsSync(patchPath)
     ? loadOverlayPatches(binName, patchPath)
     : []
-  return { name, dir, layers, patchPath, patches, patchReload }
+  return { name, dir, layers, quarantined, patchPath, patches, patchReload }
 }
 
 /**

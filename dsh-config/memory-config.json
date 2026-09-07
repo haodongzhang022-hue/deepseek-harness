@@ -1,0 +1,10 @@
+{
+  "db_path": "D:/laanceDBku2",
+  "router": "adaptive_layer_router",
+  "leak_prevention": "backfill_only",
+  "timeframe_bind": "all",
+  "integration": {
+    "8005_react": "factor_visualization",
+    "8007_fastapi": "strategy_audit"
+  }
+}

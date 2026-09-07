@@ -57,5 +57,6 @@ export class InProcessWakeTransport implements WakeTransport {
       source: { kind: 'user' },
     })
     target.followup(message)
+    return Promise.resolve()
   }
 }

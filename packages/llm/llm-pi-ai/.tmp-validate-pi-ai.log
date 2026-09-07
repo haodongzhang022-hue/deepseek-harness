@@ -1,0 +1,82 @@
+=== provider routes in settings.yaml ===
+[
+  'opencode-go',
+  'zen-free-a',
+  'zen-free-b',
+  'zen-free-c',
+  'zen-free-mimo',
+  'zen-free-d',
+  'zen-free-e',
+  'faroapi',
+  'opencode'
+]
+
+=== installed catalog provider ids (from lib via pi-ai) ===
+[
+  'amazon-bedrock',
+  'ant-ling',
+  'anthropic',
+  'azure-openai-responses',
+  'baseten',
+  'cerebras',
+  'cloudflare-ai-gateway',
+  'cloudflare-workers-ai',
+  'deepseek',
+  'fireworks',
+  'github-copilot',
+  'google',
+  'google-vertex',
+  'groq',
+  'huggingface',
+  'kimi-coding',
+  'minimax',
+  'minimax-cn',
+  'mistral',
+  'moonshotai',
+  'moonshotai-cn',
+  'nvidia',
+  'openai',
+  'openai-codex',
+  'opencode',
+  'opencode-go',
+  'openrouter',
+  'qwen-token-plan',
+  'qwen-token-plan-cn',
+  'qwen-token-plan-individual',
+  'together',
+  'vercel-ai-gateway',
+  'xai',
+  'xiaomi',
+  'xiaomi-token-plan-ams',
+  'xiaomi-token-plan-cn',
+  'xiaomi-token-plan-sgp',
+  'zai',
+  'zai-coding-cn'
+]
+
+=== 1) WHOLE section through Config.parse (zod) ===
+FAIL whole-section parse: Config.parse is not a function
+
+=== 2) per-provider resolveProfiles ===
+OK   opencode-go | piProvider ok= true | models= ?
+OK   zen-free-a | piProvider ok= true | models= ?
+OK   zen-free-b | piProvider ok= true | models= ?
+OK   zen-free-c | piProvider ok= true | models= ?
+OK   zen-free-mimo | piProvider ok= true | models= ?
+OK   zen-free-d | piProvider ok= true | models= ?
+OK   zen-free-e | piProvider ok= true | models= ?
+OK   faroapi | piProvider ok= true | models= ?
+OK   opencode | piProvider ok= true | models= ?
+
+=== 3) whole providers through resolveProfiles (equivalent to assertServiceable) ===
+PASS whole resolve. routes = [
+  'opencode-go',
+  'zen-free-a',
+  'zen-free-b',
+  'zen-free-c',
+  'zen-free-mimo',
+  'zen-free-d',
+  'zen-free-e',
+  'faroapi',
+  'opencode'
+]

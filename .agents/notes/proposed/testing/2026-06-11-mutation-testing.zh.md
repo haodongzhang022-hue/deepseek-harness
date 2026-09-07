@@ -1,6 +1,8 @@
 # Agent Note: 变异测试作为覆盖率的制衡手段
 
-Status: proposed
+Status: implemented
+
+已通过 `stryker.config.json`（范围 `packages/util`）、`vitest.mutation.config.ts`、`test:mutation` 脚本，以及 `scripts/run-gates.ts` 中非阻断的 `ci-mutation` 门禁落地；权威记录在[质量门禁 Agent Note](../../implemented/process/2026-06-11-quality-gates.zh.md)。范围与原提案的 Plan 有偏差（以 util 作为 POC 而非 llm；采用观测式门禁而非 nightly），但遵循本仓「非阻断观测式门禁」的模式。
 
 [English](2026-06-11-mutation-testing.md) | 中文
 

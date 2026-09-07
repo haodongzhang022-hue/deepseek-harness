@@ -128,7 +128,7 @@ interface ToolsExecutor {
 }
 
 /** Caller seam over the registry public execute path, namespaced per server. */
-function bindCaller(ctx: Context, serverName: string, tools: ToolsExecutor): ReleaseControlCaller {
+function bindCaller(serverName: string, tools: ToolsExecutor): ReleaseControlCaller {
   return async (toolName, args) => {
     const result = await tools.execute({
       callId: name + ':' + toolName + ':' + randomUUID(),
@@ -157,7 +157,7 @@ function resolveCaller(ctx: Context, watch: GateWatchConfig): ReleaseControlCall
   if (tools === undefined) {
     throw new Error('automation-router(' + watch.name + '): channel "mcp-tools" requires the tools service in this host')
   }
-  return bindCaller(ctx, watch.serverName, tools)
+  return bindCaller(watch.serverName, tools)
 }
 
 function resolveTransport(ctx: Context, watch: GateWatchConfig): WakeTransport {

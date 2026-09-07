@@ -11,7 +11,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { withFileLock } from '@deepseek-ai/dsh-atomic-write'
-import { afterAll, describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
   composeEntries,
   healProfilesModuleFallback,
@@ -26,16 +26,7 @@ import {
   type Profile,
 } from '../src/index.ts'
 
-const tempRoots: string[] = []
-afterAll(() => {
-  for (const root of tempRoots.splice(0)) rmSync(root, { recursive: true, force: true })
-})
-
-const tmp = (): string => {
-  const dir = mkdtempSync(join(tmpdir(), 'dsh-profile-'))
-  tempRoots.push(dir)
-  return dir
-}
+const tmp = (): string => mkdtempSync(join(tmpdir(), 'dsh-profile-'))
 
 /** Stage a fake installed app: package.json with deps and a node_modules holding bundles. */
 function stageInstallation(
@@ -82,6 +73,7 @@ function stageProfile(home: string, name: string, bundleAnchor: string): Profile
       patchPath: join(bundleAnchor, '..', 'cordis.patch.yml'),
       patches: [],
     }],
+    quarantined: [],
     patchPath: join(dir, PROFILE_PATCH_FILENAME),
     patches: [],
     patchReload: 'live',
@@ -288,12 +280,51 @@ describe('loadProfile', () => {
     expect(() => loadProfile('t', 'demo', anchor, home)).toThrow('patchReload must be "live" or "startup"')
   })
 
-  it('fails loud when a listed bundle declares no dsh.bundle', () => {
-    const anchor = stageInstallation({ 'not-a-bundle': {} })
+  it('quarantines a listed bundle that declares no dsh.bundle instead of crashing', () => {
+    const anchor = stageInstallation({ 'not-a-bundle': {}, 'good-bundle': { patch: '- id: a\n  name: pkg-a\n' } })
     const home = tmp()
     const dir = resolveProfileDir('demo', home)
-    initProfile(dir, ['not-a-bundle'])
-    expect(() => loadProfile('t', 'demo', anchor, home)).toThrow('declares no dsh.bundle')
+    initProfile(dir, ['not-a-bundle', 'good-bundle'])
+    const warnings: string[] = []
+    const { layers, quarantined } = loadProfile('t', 'demo', anchor, home, {
+      warn: message => warnings.push(message),
+    })
+    // The non-bundle is refused, never mounted; the valid layer still boots.
+    expect(layers.map(layer => layer.packageName)).toEqual(['good-bundle'])
+    expect(quarantined.map(entry => entry.packageName)).toEqual(['not-a-bundle'])
+    expect(quarantined[0]?.message).toContain('no dsh.bundle')
+    expect(warnings.join('\n')).toContain('"not-a-bundle"')
+  })
+
+  it('refuses non-whitelisted bundles outright when a whitelist is present', () => {
+    const anchor = stageInstallation({
+      'admitted': { patch: '- id: a\n  name: pkg-a\n' },
+      'not-admitted': { patch: '- id: b\n  name: pkg-b\n' },
+    })
+    const home = tmp()
+    const dir = resolveProfileDir('demo', home)
+    initProfile(dir, ['admitted', 'not-admitted'])
+    const manifest = readProfileManifest('t', dir)
+    manifest.dsh!.profile!.whitelist = ['admitted']
+    writeProfileManifest(dir, manifest)
+    const { layers, quarantined } = loadProfile('t', 'demo', anchor, home)
+    expect(layers.map(layer => layer.packageName)).toEqual(['admitted'])
+    expect(quarantined.map(entry => entry.packageName)).toEqual(['not-admitted'])
+    expect(quarantined[0]?.message).toContain('whitelist')
+  })
+
+  it('quarantines a whitelisted bundle whose patch layer fails to load', () => {
+    const anchor = stageInstallation({ 'broken-patch': { patch: 'not: [valid: yaml' } })
+    const home = tmp()
+    const dir = resolveProfileDir('demo', home)
+    initProfile(dir, ['broken-patch'])
+    const manifest = readProfileManifest('t', dir)
+    manifest.dsh!.profile!.whitelist = ['broken-patch']
+    writeProfileManifest(dir, manifest)
+    const { layers, quarantined } = loadProfile('t', 'demo', anchor, home)
+    expect(layers).toEqual([])
+    expect(quarantined.map(entry => entry.packageName)).toEqual(['broken-patch'])
+    expect(quarantined[0]?.message).toContain('patch layer')
   })
 })
 
@@ -429,6 +460,7 @@ describe('healProfilesModuleFallback', () => {
         patchPath: join(bundleLink, 'cordis.patch.yml'),
         patches: [],
       }],
+      quarantined: [],
       patchPath: join(dir, PROFILE_PATCH_FILENAME),
       patches: [],
       patchReload: 'live',
@@ -474,6 +506,7 @@ describe('healProfilesModuleFallback', () => {
         patchPath: join(packageDir, 'cordis.patch.yml'),
         patches: [],
       })),
+      quarantined: [],
       patchPath: join(dir, PROFILE_PATCH_FILENAME),
       patches: [],
       patchReload: 'live',
@@ -514,6 +547,7 @@ describe('healProfilesModuleFallback', () => {
         patchPath: join(packageDir, 'cordis.patch.yml'),
         patches: [],
       })),
+      quarantined: [],
       patchPath: join(dir, PROFILE_PATCH_FILENAME),
       patches: [],
       patchReload: 'live',

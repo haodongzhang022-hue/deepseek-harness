@@ -3,10 +3,10 @@
  * @module ui-automation-calendar/client/components/CalendarRoot
  */
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import type { CalendarComponentProps } from '../contract/slots.ts'
 import type { GranularityId, TimeRange } from '../contract/time-granularity.ts'
-import { useCalendarViewModel } from '../hooks/useCalendarViewModel.ts'
+import { useCalendarViewModel, type TurnTiming } from '../hooks/useCalendarViewModel.ts'
 import { TimeAxis } from './TimeAxis.tsx'
 import { TaskGrid } from './TaskGrid.tsx'
 import { SummaryBar } from './SummaryBar.tsx'
@@ -30,6 +30,7 @@ const DEFAULT_GRANULARITY: GranularityId = 'hour'
 
 export function CalendarRoot({
   useSession,
+  useCalendar,
   navigateToSession,
   t,
 }: CalendarComponentProps) {
@@ -39,19 +40,26 @@ export function CalendarRoot({
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
   const [selectedResourceId, setSelectedResourceId] = useState('token')
 
-  // Framework selector hooks over the conversation snapshot - each slice
-  // re-renders only when its own value changes.
-  const turnTimings = useSession(s => s.turnTimings)
+  // Framework selector hooks over their snapshots - each slice re-renders
+  // only when its own value changes. Turn timings arrive from the Calendar
+  // target; the running/error/lifecycle halves from the Session snapshot. The
+  // model consumes a chronological Array, so the timing map is projected here
+  // (stable per map identity, which the snapshot's structural sharing keeps
+  // cheap).
+  const turnTimingsMap = useCalendar(s => s.turnTimings)
   const running = useSession(s => s.running)
   const lastAgentError = useSession(s => s.lastAgentError)
   const snapshotSessionId = useSession(s => s.sessionId)
 
-  const modelInput = turnTimings === undefined ? undefined : {
-    turnTimings,
-    running,
-    lastAgentError,
-    sessionId: String(snapshotSessionId),
-  }
+  const modelInput = useMemo(() => {
+    const turnTimings: TurnTiming[] = [...turnTimingsMap.values()]
+    return {
+      turnTimings,
+      running,
+      lastAgentError,
+      sessionId: String(snapshotSessionId),
+    }
+  }, [turnTimingsMap, running, lastAgentError, snapshotSessionId])
 
   const { viewModel, stuckTasks, anomalies } = useCalendarViewModel(
     modelInput,

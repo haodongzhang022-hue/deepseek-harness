@@ -96,7 +96,7 @@ export class FileLedger {
       sourceLane: item.sourceLane,
       title: item.title,
       lastState: item.state,
-      notifiedState: existing?.notifiedState,
+      ...(existing?.notifiedState === undefined ? {} : { notifiedState: existing.notifiedState }),
       notifyCount: existing?.notifyCount ?? 0,
       updatedAt: Date.now(),
     })

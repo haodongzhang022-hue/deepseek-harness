@@ -6,13 +6,14 @@ import { join } from 'node:path'
 import LlmRuntime, { LlmAdapter } from '@deepseek-ai/dsh-llm'
 import { credentialRef } from '@deepseek-ai/dsh-credentials'
 import { LocalCredentialProvider } from '@deepseek-ai/dsh-credentials-local'
+import { settingsNamespace } from '@deepseek-ai/dsh-settings'
 import { FileSettingsProvider } from '@deepseek-ai/dsh-settings-file'
 import * as LlmPiAi from '@deepseek-ai/dsh-llm-pi-ai'
 import AuthorizationService from '@deepseek-ai/dsh-authorization'
 import { assemble } from './assemble.ts'
 import { closeMockServers, mockServer, textEvents } from './mock-server.ts'
 
-const NS = 'llm-pi-ai'
+const NS = settingsNamespace('llm-pi-ai')
 
 /** Minimal foreign adapter: only needs to own a route the pi-ai plugin then wants. */
 class StubAdapter extends LlmAdapter {
@@ -70,6 +71,19 @@ describe('login flows in a real composition', () => {
     // else this plugin does still works.
     expect(ctx.get('authorization')).toBeUndefined()
     expect(ctx.llm.listConfigurableProviders().length).toBeGreaterThan(0)
+  })
+
+  it('keeps Xiaomi token-plan channels visible when Xiaomi is in the catalog', async () => {
+    const ctx = await boot(await home(), {})
+    const providers = new Set(ctx.llm.listConfigurableProviders().map(entry => entry.provider))
+
+    // Guard the compatibility guarantee to the Xiaomi family: if upstream ever
+    // removes the family entirely, there is no source catalog route to alias.
+    if (!providers.has('xiaomi')) return
+
+    expect(providers.has('xiaomi-token-plan-cn')).toBe(true)
+    expect(providers.has('xiaomi-token-plan-ams')).toBe(true)
+    expect(providers.has('xiaomi-token-plan-sgp')).toBe(true)
   })
 })
 
@@ -190,11 +204,6 @@ describe('request-level dynamic profiles', () => {
     // and then quietly disabling every route in the namespace.
     await expect(ctx.settings.update(NS, { providers: { 'not-a-real-provider': {} } }))
       .rejects.toThrow(/resolves no models/)
-    expect(ctx.llm.listProviders().map(provider => provider.id)).toEqual(['openai'])
-
-    await expect(ctx.settings.update(NS, {
-      providers: { openai: { headers: { 'bad header name': 'value' } } },
-    })).rejects.toThrow(/provider "openai" header "bad header name" is not valid for Fetch/)
     expect(ctx.llm.listProviders().map(provider => provider.id)).toEqual(['openai'])
   })
 

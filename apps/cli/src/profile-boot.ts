@@ -30,7 +30,6 @@ import {
   type Profile,
 } from '@deepseek-ai/dsh-app-boot'
 import { resolveDshHome } from '@deepseek-ai/dsh-home-paths'
-import { installProxyFromEnvironment } from '@deepseek-ai/dsh-http-proxy'
 import { DSH_LAUNCH_ENVIRONMENT_KEY, type LaunchEnvironmentSnapshot } from '@deepseek-ai/dsh-launch-environment'
 import { provideCmdline, type AppReady } from '@deepseek-ai/dsh-cmdline'
 import { createProcessShutdown, type ProcessShutdown } from './process-shutdown.ts'
@@ -117,7 +116,12 @@ export function resolveTelemetryPatch(disabledEnv: string | undefined, hasRow: b
  * @returns the loaded profile.
  */
 export function prepareProfile(name: string, userLayer = true): Profile {
-  const profile = loadProfile(NAME, name, INSTALL_ANCHOR, undefined, { userLayer })
+  const profile = loadProfile(NAME, name, INSTALL_ANCHOR, undefined, {
+    userLayer,
+    // Admission refusals are reported loudly but never abort boot: an
+    // unqualified third-party bundle must not take down the whole system.
+    warn: message => process.stderr.write(`${message}\n`),
+  })
   writeFileSync(join(profile.dir, PROFILE_ROOT_FILENAME), PROFILE_ROOT_CONFIG)
   return profile
 }
@@ -208,22 +212,10 @@ function suppressShutdownError(ctx: Context, signal: AbortSignal, error: unknown
  * @returns the settled root context and the shutdown controller.
  */
 export async function runProfile(options: RunProfileOptions): Promise<{ ctx: Context; shutdown: ProcessShutdown }> {
-  // Before the first plugin mounts and before anything can issue a request: Node's fetch ignores the
-  // proxy environment on its own, so every profile would otherwise connect directly. Resolving from
-  // the launcher's snapshot — not `process.env` — is what lets a proxy declared in a `.env` layer
-  // work, which the NODE_USE_ENV_PROXY flag cannot do because Node samples the environment at start.
-  const disposeProxy = await installProxyFromEnvironment(
-    options.environment,
-    (message) => { process.stderr.write(`${NAME}: ${message}\n`) },
-  )
-
   const composed = await composeProfile(options.profile, options.patchFiles)
   const app: { current?: Context } = {}
   const appReady = createAppReady()
-  const shutdown = createProcessShutdown(async () => {
-    await app.current?.fiber.dispose()
-    await disposeProxy()
-  })
+  const shutdown = createProcessShutdown(async () => { await app.current?.fiber.dispose() })
   const signalShutdown = new AbortController()
   const interrupt = (code: number): void => {
     signalShutdown.abort()
@@ -273,6 +265,12 @@ export async function runProfile(options: RunProfileOptions): Promise<{ ctx: Con
       exit: code => void shutdown.shutdown(code),
       ready: appReady.service,
     })
+  }, undefined, {
+    // Quarantine is bounty-free by design: a rejected external/third-party
+    // entry is skipped and reported, never allowed to take the whole tree down
+    // with itself. Entries reach this callback only after the tree settles, so
+    // writing here cannot commit a partial startup.
+    onQuarantine: message => void process.stderr.write(`${message}\n`),
   })
   app.current = ctx
   // A live-reload profile can dispose the whole tree while post-boot watcher

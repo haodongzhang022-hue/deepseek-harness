@@ -230,7 +230,16 @@
         "sonarjs/no-identical-conditions": "error",
         "sonarjs/no-identical-expressions": "error",
         "sonarjs/no-identical-functions": "error",
-        "sonarjs/no-duplicated-branches": "error"
+        "sonarjs/no-duplicated-branches": "error",
+        // Complexity gates (Bob-style code-quality闸门): cognitive complexity is the
+        // CRAP-score proxy this repo needs — coverage is forced to 100% perfile, so
+        // CRAP≈0 for covered code and cognitive complexity is the discriminative signal.
+        // Introduced as warn to ratchet: measure the current inventory, then flip to
+        // error once the existing source is within the band (see .agents/notes quality-gates).
+        "sonarjs/cognitive-complexity": ["warn", 15],
+        // Native cyclomatic-complexity gate (Bob-style圈复杂度). Correctness category is
+        // off repo-wide, so this must be set explicitly to take effect. warn to ratchet.
+        "complexity": ["warn", { "max": 20 }]
       },
       "jsPlugins": [
         "eslint-plugin-sonarjs"

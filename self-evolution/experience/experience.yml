@@ -1,0 +1,37 @@
+# self-evolution 经验库（⑥）声明化策略  version: 0.3.0
+# 修改这份文件即可调参，无需改代码。经验以 版本化 + 统一时间戳 写入唯一事实库(SQLite)，
+# 新版本永远最高权重；旧经验保留但不作直接参考。
+
+version: "0.3.0"
+
+# 唯一事实库（SQLite，唯一事实源，禁止模拟数据）
+store:
+  # 数据库路径（相对本配置文件所在目录；每功能一个文件）
+  db: "data/experiences.db"
+  # 经验主表 + FTS5 检索表名
+  table: "experiences"
+  fts_table: "experiences_fts"
+  # 统一时间戳：写入格式。所有行与镜像文档共用同一时间戳，保证时间序列一致
+  ts_fmt: "%Y-%m-%dT%H:%M:%S%z"
+
+# 经验蒸馏规则
+distill:
+  # 新增经验的最低置信度（0~1）；低于则拒绝（fail loud，不静默丢弃）
+  min_confidence: 0.30
+  # 复用频次阈值：达到即把置信度上探一档，鼓励反复验证过的经验被优先命中
+  promote_after_uses: 3
+
+# 检索排序权重（同一功能，单点配置）：置信度 + 时间新鲜度(新版本最高权重) + 复用频次
+rank:
+  confidence: 0.4
+  recency: 0.3
+  usage: 0.3
+  # 检索条数上限
+  top_k: 5
+
+# 人类可读镜像（用户规则：md 按功能一份，不拆散热文件）
+mirror:
+  # 镜像 Markdown 文件路径（相对本配置文件所在目录）；追加写入，按时间戳分节
+  file: "data/experiences.md"
+  # 是否在每次增删后重新全量渲染镜像（保持与唯一事实库一致）
+  auto_render: true

@@ -9,7 +9,7 @@ import { RouterEngine } from '../src/engine.ts'
 import type { GateItem, PipelineGateAdapter, WakeTargetResolver } from '@deepseek-ai/dsh-automation-gate'
 
 function item(id: string, state: GateItem['state'], detail?: string): GateItem {
-  return { id, sourceLane: '8010', title: '任务' + id, state, detail }
+  return { id, sourceLane: '8010', title: '任务' + id, state, ...(detail === undefined ? {} : { detail }) }
 }
 
 /** Mutable snapshot backing one fake adapter; swaps drive state transitions. */
@@ -33,7 +33,6 @@ const recorder: WakeTransport = {
 function fakeResolver(sessionId: string | null): WakeTargetResolver & { calls: number } {
   const view = { calls: 0 }
   return {
-    calls: view.calls,
     get calls() { return view.calls },
     resolve: async () => {
       view.calls += 1
@@ -75,9 +74,9 @@ describe('RouterEngine', () => {
     const summary = await engine.tick()
     expect(summary.woken).toEqual(['RC-1'])
     expect(delivered).toHaveLength(1)
-    expect(delivered[0].session).toBe('session-abc')
-    expect(delivered[0].text).toContain('驳回')
-    expect(delivered[0].text).toContain('单测未过')
+    expect(delivered[0]!.session).toBe('session-abc')
+    expect(delivered[0]!.text).toContain('驳回')
+    expect(delivered[0]!.text).toContain('单测未过')
 
     // Same snapshot again: no duplicate wake.
     await engine.tick()
@@ -147,7 +146,7 @@ describe('RouterEngine', () => {
     expect(existsSync(path)).toBe(true)
     const raw = JSON.parse(readFileSync(path, 'utf8')) as { version: number; items: Record<string, { lastState: string }> }
     expect(raw.version).toBe(1)
-    expect(raw.items['RC-3'].lastState).toBe('passed')
+    expect(raw.items['RC-3']?.lastState).toBe('passed')
   })
 })
 

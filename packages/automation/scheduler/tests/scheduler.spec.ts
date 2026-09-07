@@ -44,10 +44,10 @@ describe('SchedulerEngine', () => {
     await engine.sweep()
     expect(r.calls).toBe(2)
 
-    const lines = readFileSync(path, 'utf8').trim().split('\n').map(l => JSON.parse(l) as { job: string; ok: boolean; detail: string })
+    const lines = readFileSync(path, 'utf8').trim().split('\n').map(l => JSON.parse(l) as { job: string; ok: boolean; detail: string; at: string })
     expect(lines).toHaveLength(2)
     expect(lines[0]).toMatchObject({ job: 'dispatch', ok: true, detail: 'http 200' })
-    expect(lines[0].at).toContain('T')
+    expect(lines[0]?.at).toContain('T')
   })
 
   it('backs off multiplicatively while a job keeps failing', async () => {
@@ -96,5 +96,37 @@ describe('SchedulerEngine', () => {
     now += 6_000
     await engine.sweep()
     expect(r.calls).toBe(3)
+  })
+
+  it('fires a one-time job exactly once at its onceAt and never again', async () => {
+    let now = 4_000_000
+    const r = runner([{ ok: true, detail: 'exit 0' }])
+    const path = journalPath()
+    const engine = new SchedulerEngine({
+      jobs: [{ name: 'once', onceAt: 5_000_000 }],
+      buildRunner: () => r,
+      journalPath: path,
+      now: () => now,
+    })
+
+    // Before the due instant: no fire, and the engine reports the wait.
+    await engine.sweep()
+    expect(r.calls).toBe(0)
+    expect(engine.msUntilNextDue()).toBe(1_000_000)
+
+    // At the due instant: fires exactly once.
+    now = 5_000_000
+    await engine.sweep()
+    expect(r.calls).toBe(1)
+
+    // Far past due: never fires again on repeated sweeps.
+    now += 3_600_000
+    await engine.sweep()
+    await engine.sweep()
+    expect(r.calls).toBe(1)
+
+    const lines = readFileSync(path, 'utf8').trim().split('\n').map(l => JSON.parse(l) as { job: string; ok: boolean })
+    expect(lines).toHaveLength(1)
+    expect(lines[0]).toMatchObject({ job: 'once', ok: true })
   })
 })

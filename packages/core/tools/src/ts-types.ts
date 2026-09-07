@@ -283,6 +283,28 @@ function renderBashExample(schemas: ToolSdkSchema[]): string {
 }
 
 /**
+ * Render a generic `run_code` worked example naming a tool that is actually
+ * declared, so a session without a qualifying `bash` binding still shows the
+ * model a concrete call envelope instead of only abstract prose. Truthfulness
+ * is preserved: `tools.<name>` references a real binding from the given (already
+ * sorted) visible set; exotic names use the quoted-access form. Returns '' for
+ * an empty set, so nothing misleading is ever emitted.
+ */
+function renderGenericExample(sorted: ToolSdkSchema[]): string {
+  // Never name the `bash` binding here: a qualifying `bash` already gets the
+  // dedicated example, and an unqualifying one must not be reached through
+  // `tools.bash(...)` with argument-free prose that its schema rejects.
+  const first = sorted.find(schema => schema.name !== 'bash')
+  if (first === undefined) return ''
+  // A valid identifier binds as `tools.name`; any other name binds only through
+  // bracket access `tools["name"]` (bare `tools."name"` would not parse).
+  const access = IDENTIFIER.test(first.name)
+    ? `tools.${first.name}`
+    : `tools[${JSON.stringify(first.name)}]`
+  return ` When no separate \`bash\` binding is supplied, drive a declared binding from inside \`run_code\`, e.g.:\n\n\`run_code({ code: "return await ${access}({ /* arguments from the declaration below */ })", description: "Summarize this step" })\``
+}
+
+/**
  * Render the full `tools:sdk` prompt section: the fixed usage instructions
  * plus one `declare const tools` interface covering every given tool.
  * Deterministic — tools are emitted in lexicographic name order, so an
@@ -313,5 +335,11 @@ export function renderToolsSdk(schemas: ToolSdkSchema[]): string {
     ['declare const tools: {', '  [K in ToolName]: (args: ToolArgsMap[K]) => Promise<ToolOutputMap[K]>;', '}'].join('\n'),
   ].join('\n\n')
   const jsonValue = 'type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue }'
-  return `${SDK_INSTRUCTIONS}${renderBashExample(sorted)}\n\n${SDK_PROGRAM_INSTRUCTIONS}\n\n\`\`\`ts\n${jsonValue}\n\n${declaration}\n\`\`\``
+  // A worked `run_code` call envelope always renders above the declarations:
+  // the bash-specific example when a qualifying `bash` binding exists, else a
+  // generic one naming a real declared binding — so a session without bash
+  // (for example, one whose tools include `todo_write`/`read_file` but no
+  // shell) still sees a concrete call template, not only abstract prose.
+  const example = renderBashExample(sorted) || renderGenericExample(sorted)
+  return `${SDK_INSTRUCTIONS}${example}\n\n${SDK_PROGRAM_INSTRUCTIONS}\n\n\`\`\`ts\n${jsonValue}\n\n${declaration}\n\`\`\``
 }

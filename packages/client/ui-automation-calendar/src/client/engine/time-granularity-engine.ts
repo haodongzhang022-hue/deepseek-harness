@@ -251,7 +251,7 @@ export class TimeGranularityEngine {
       return `${String(date.getSeconds()).padStart(2, '0')}s`
     }
     if (config.tickFormat.includes('SSS')) {
-      return '${date.getMilliseconds()}ms'
+      return `${date.getMilliseconds()}ms`
     }
 
     return date.toLocaleTimeString()

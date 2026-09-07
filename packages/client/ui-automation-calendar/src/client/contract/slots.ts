@@ -1,48 +1,15 @@
 /**
  * Automation Calendar slot contract: the registrant-side props composition for
- * the conversation-view calendar slot and its child holes.
+ * the conversation view tab and the injected navigation face, plus the
+ * `useCalendar` standard-hook name this session-scoped view consumes.
  */
-import type { PropsLocale, PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-// Type-only: pulls ui-conversation's SlotMap merge ('conversation.view') into
-// every program that sees this contract.
+import type { PropsLocale, PropsRuntime, SnapshotSelectorHook } from '@deepseek-ai/dsh-client-ui-slots'
+// Type-only: pulls ui-conversation's SlotMap merge ('conversation.view') and
+// the target assembly types into every program that sees this contract;
+// ui-conversation owns the slot declaration, this package only contributes an
+// entry and targets.
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
-
-declare module '@deepseek-ai/dsh-client-ui-slots' {
-  interface SlotMap {
-    /**
-     * The automation calendar view - task timeline with resource monitoring,
-     * rendered as one entry of the 'conversation.view' list slot.
-     */
-    'calendar.view': {
-      kind: 'single'
-      scope: 'session'
-      owner: CalendarOwnerProps
-    }
-
-    /**
-     * Task details body - the selected task's facts panel inside the calendar.
-     */
-    'calendar.task.details': {
-      kind: 'single'
-      scope: 'session'
-      owner: TaskDetailsOwnerProps
-    }
-  }
-}
-
-/**
- * Owner share of the calendar view hole. sessionId/useSession ride the
- * session-scope standard kit (PropsRuntime), never the owner share.
- */
-export interface CalendarOwnerProps {}
-
-/** Owner share of the task details hole. */
-export interface TaskDetailsOwnerProps {
-  /** The selected task id, null when the panel is closed. */
-  taskId: string | null
-  /** Close the details panel. */
-  onClose: () => void
-}
+import type { CalendarSnapshot } from '../calendar-snapshot-builder.ts'
 
 /**
  * Registrant-private injected share (arrives via the register inject factory).
@@ -52,12 +19,37 @@ export type CalendarInjected = {
   navigateToSession: (sessionId: string) => void
 }
 
+/** Selector hook over the current Conversation binding's Calendar target. */
+export type UseCalendar = SnapshotSelectorHook<CalendarSnapshot>
+
+declare module '@deepseek-ai/dsh-client-ui-conversation/client' {
+  interface ConversationViewSnapshotMap {
+    /** Independently assembled timing data consumed by the Calendar view. */
+    calendar: CalendarSnapshot
+  }
+}
+
+declare module '@deepseek-ai/dsh-client-ui-slots' {
+  interface SessionStandardProps {
+    /** Selector hook over the current Conversation binding's Calendar target. */
+    useCalendar: UseCalendar
+  }
+}
+
 /**
- * Full component props: runtime share (standard kit + owner) plus the declared
- * holes' render shares, this package's injected callbacks, and the locale seat.
+ * Runtime share of the mount seat: the conversation view tab
+ * ('conversation.view'). It is a session-scope slot delivering the standard
+ * kit; the view tab's extra owner props (the inspect handoff) are ignored by
+ * this pure presenter.
+ */
+export type CalendarRuntimeProps =
+  PropsRuntime<'conversation.view'>
+
+/**
+ * Full component props: the session-scope runtime share of the mount seat
+ * plus this package's injected callbacks and the calendar locale seat.
  */
 export type CalendarComponentProps =
-  PropsRuntime<'calendar.view'>
-  & PropsRenderSlots<'calendar.task.details'>
+  CalendarRuntimeProps
   & CalendarInjected
   & PropsLocale<'calendar'>

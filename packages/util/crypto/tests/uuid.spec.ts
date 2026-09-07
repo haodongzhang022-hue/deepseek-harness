@@ -26,6 +26,19 @@ describe('randomUUID', () => {
       vi.unstubAllGlobals()
     }
   })
+
+  it('preserves every input byte except the version (byte 6) and variant (byte 8) pins', () => {
+    // Deterministic plan with the high bit clear on every byte, so pinning is observable.
+    const plan = Uint8Array.from({ length: 16 }, (_, i) => i + 1)
+    const stub = { getRandomValues: (arr: Uint8Array) => { arr.set(plan); return arr } } as unknown as Crypto
+    vi.stubGlobal('crypto', stub)
+    try {
+      // byte6 -> 0x47 (version 4), byte8 -> 0x89 (variant 10); all other bytes unchanged from plan.
+      expect(randomUUID()).toBe('01020304-0506-4708-890a-0b0c0d0e0f10')
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
 })
 
 describe('bytesToBase64', () => {

@@ -18,7 +18,7 @@ import Group from '@deepseek-ai/cordis-plugin-group'
 import { dshHomePath, resolveDshHome } from '@deepseek-ai/dsh-home-paths'
 import { createLaunchEnvironmentSnapshot, type LaunchEnvironmentSnapshot } from '@deepseek-ai/dsh-launch-environment'
 import type {} from '@deepseek-ai/cordis-plugin-hmr'
-import type {} from '@deepseek-ai/dsh-system-prompt'
+import { FIRST_PARTY_SECTION_ORDER } from '@deepseek-ai/dsh-system-prompt'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -50,6 +50,7 @@ export {
   type ProfileModuleFallbackOptions,
   type ProfilePatchReload,
   type ProfileTemplate,
+  type QuarantinedBundle,
 } from './profile.ts'
 
 /**
@@ -120,18 +121,8 @@ const BOOTSTRAP_NAMES = new Set([
 const BOOTSTRAP_PREFIXES = ['DSH_', 'XDG_', 'DYLD_', 'BASH_FUNC_']
 
 /**
- * The bootstrap names the Harness-home `.env` alone may set. A proxy chooses the route every
- * request takes, so the invoking directory's file — which arrives with a clone — keeps refusing
- * them; the home file is the user's own, and `DSH_HOME` is itself bootstrap-only, so no `.env` can
- * relocate this exemption. The CA and TLS names in the same group stay refused everywhere: they
- * change what is trusted, not where traffic goes.
- */
-const HOME_LAYER_PROXY_NAMES = new Set(['HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'NO_PROXY'])
-
-/**
  * Whether a variable may come only from the inherited process environment
- * because it changes process, runtime, VCS, or network bootstrap. The Harness-home
- * file is additionally allowed {@link HOME_LAYER_PROXY_NAMES}.
+ * because it changes process, runtime, VCS, or network bootstrap.
  * @param name - the variable name.
  * @returns true when only the inherited environment may supply it.
  */
@@ -146,15 +137,13 @@ function isBootstrapOnly(name: string): boolean {
  * @param binName - the diagnostic prefix on the thrown error.
  * @param dir - the directory whose `.env` to read.
  * @param warn - sink for the one-line unreadable-file diagnostic.
- * @param home - the resolved Harness home; when `dir` is it, {@link HOME_LAYER_PROXY_NAMES} are accepted.
  * @returns the parsed entries, or `undefined` when the file is absent or unreadable.
- * @throws when the file declares a name {@link isBootstrapOnly} rejects and this layer may not set.
+ * @throws when the file declares a name {@link isBootstrapOnly} rejects.
  */
 function readEnvLayer(
-  binName: string, dir: string, warn: (line: string) => void, home: string,
+  binName: string, dir: string, warn: (line: string) => void,
 ): { path: string; values: Record<string, string> } | undefined {
   const path = resolve(dir, '.env')
-  const isHome = resolve(dir) === home
   let content: string
   try {
     content = readFileSync(path, 'utf8')
@@ -169,16 +158,10 @@ function readEnvLayer(
   const values = parseEnv(content) as Record<string, string>
   for (const name of Object.keys(values)) {
     if (!isBootstrapOnly(name)) continue
-    const proxyName = HOME_LAYER_PROXY_NAMES.has(name.toUpperCase())
-    if (isHome && proxyName) continue
-    // A proxy name has a second way out that the other bootstrap names do not, so its message says so.
-    const remedy = proxyName
-      ? `export ${name}, or put it in ${resolve(home, '.env')}, which does not travel with a repository`
-      : `export ${name} instead of putting it in a .env file`
     throw new Error(
       `${binName}: ${path} sets "${name}", which only the launching environment may set`
       + ' (it decides how this process starts, where its code and instructions load from, or how it'
-      + ` reaches the network); ${remedy}`,
+      + ` reaches the network); export ${name} instead of putting it in a .env file`,
     )
   }
   return { path, values }
@@ -193,7 +176,7 @@ function readEnvLayer(
  * @param cwd - the invoking directory whose `.env` is the project layer.
  * @param warn - sink for the one-line misconfiguration diagnostics.
  * @returns this run's frozen environment snapshot.
- * @throws when either file declares a bootstrap-only variable, except {@link HOME_LAYER_PROXY_NAMES} in the Harness-home file.
+ * @throws when either file declares a bootstrap-only variable.
  */
 export function loadLayeredEnv(
   binName: string, cwd: string = process.cwd(),
@@ -202,8 +185,8 @@ export function loadLayeredEnv(
   const home = resolveDshHome()
   const inherited = { ...process.env } as Record<string, string>
   // Parse both layers first: a rejection must not leave one file applied.
-  const project = readEnvLayer(binName, cwd, warn, home)
-  const user = home === resolve(cwd) ? undefined : readEnvLayer(binName, home, warn, home)
+  const project = readEnvLayer(binName, cwd, warn)
+  const user = home === resolve(cwd) ? undefined : readEnvLayer(binName, home, warn)
   // Apply the checked values without replacing a higher-ranked name.
   for (const layer of [project, user]) {
     if (layer === undefined) continue
@@ -682,17 +665,39 @@ export function installFailLoud(
 }
 
 /**
+ * A plugin entry is installation-owned (and must fail loud) when it is a
+ * first-party bundle (`@deepseek-ai/*`) or an internal builtin (`cordis:*`).
+ * Every other entry is user or third-party, so admission failure on it is
+ * quarantined rather than taking the whole system down.
+ */
+function isCoreBundleEntry(name: string): boolean {
+  return name.startsWith('@deepseek-ai/') || name.startsWith('cordis:')
+}
+
+/**
  * After the tree settles, reject entries with no fiber and name every plugin
- * whose module failed to resolve. Disabled entries are the only valid
- * fiber-less state.
+ * whose module failed to resolve, while quarantining external plugins instead
+ * of crashing. Disabled entries are the only valid fiber-less state. A
+ * first-party or internal entry without a fiber is a genuine install failure
+ * and aborts boot loud; a user/third-party entry is quarantined (reported via
+ * {@link onQuarantine}) so the system continues.
  * @param ctx - the settled context whose loader entries to audit.
  * @param binName - the diagnostic prefix on the thrown error.
+ * @param options - `onQuarantine` receives one line per quarantined external plugin.
  */
-export function assertEntriesLoaded(ctx: Context, binName: string): void {
+export function assertEntriesLoaded(
+  ctx: Context, binName: string, options: { onQuarantine?: (message: string) => void } = {},
+): void {
+  const onQuarantine = options.onQuarantine
   const failed = [...ctx.loader.entries()].filter(entry => entry.fiber === undefined && !entry.disabled)
-  if (failed.length > 0) {
-    const names = failed.map(entry => entry.options.name).join(', ')
-    throw new Error(`${binName}: plugin(s) failed to load: ${names}; Cordis startup failed because these plugin(s) could not be resolved (see the error(s) logged above)`)
+  const core = failed.filter(entry => isCoreBundleEntry(entry.options.name))
+  for (const entry of failed) {
+    if (isCoreBundleEntry(entry.options.name)) continue
+    onQuarantine?.(`${binName}: plugin ${JSON.stringify(entry.options.name)} could not be resolved while booting; quarantining it, the system continues without it`)
+  }
+  if (core.length > 0) {
+    const names = core.map(entry => entry.options.name).join(', ')
+    throw new Error(`${binName}: core plugin(s) failed to load: ${names}; Cordis startup failed because these plugin(s) could not be resolved (see the error(s) logged above)`)
   }
 }
 
@@ -715,45 +720,59 @@ function formatActivationError(error: unknown): string {
  * Plugin failures include the original thrown stack; pending entries name their
  * unresolved services because no plugin error exists for that state. Active
  * entries require no further wait; only failed fibers are awaited to recover
- * their private rejection reason.
+ * their private rejection reason. A first-party or internal entry that failed
+ * or never activated aborts boot loud; a user/third-party entry is quarantined
+ * (reported via {@link onQuarantine}) so the system starts without it.
  * @param ctx - the settled context whose Loader entries to audit.
  * @param binName - the diagnostic prefix on the thrown error.
- * @returns nothing when every enabled entry is active.
- * @throws after one process rejection checkpoint when an entry failed to
+ * @param options - `onQuarantine` receives one line per quarantined external plugin.
+ * @returns nothing when every enabled core entry is active.
+ * @throws after one process rejection checkpoint when a core entry failed to
  * import, rejected during activation, or did not become active.
  */
-export async function assertEntriesActivated(ctx: Context, binName: string): Promise<void> {
-  assertEntriesLoaded(ctx, binName)
-  const failures: string[] = []
+export async function assertEntriesActivated(
+  ctx: Context, binName: string, options: { onQuarantine?: (message: string) => void } = {},
+): Promise<void> {
+  const onQuarantine = options.onQuarantine
+  assertEntriesLoaded(ctx, binName, { onQuarantine })
+  const coreFailures: string[] = []
   const rejectionReasons: unknown[] = []
+  const quarantine = (name: string): void => {
+    onQuarantine?.(`${binName}: plugin ${JSON.stringify(name)} did not activate while booting; quarantining it, the system continues without it`)
+  }
   for (const entry of ctx.loader.entries()) {
     const fiber = entry.fiber
     if (fiber === undefined || entry.disabled) continue
     const state = fiber.state
+    const name = entry.options.name
+    const record = (failure: string): void => {
+      if (isCoreBundleEntry(name)) coreFailures.push(failure)
+      else quarantine(name)
+    }
     if (state === FIBER_ACTIVE) continue
     if (state === FIBER_FAILED) {
       try {
         await fiber.await()
       } catch (error) {
-        rejectionReasons.push(error)
-        failures.push(`${entry.options.name}: ${formatActivationError(error)}`)
+        if (isCoreBundleEntry(name)) rejectionReasons.push(error)
+        record(`${name}: ${formatActivationError(error)}`)
       }
       continue
     }
     if (state === FIBER_PENDING) {
       const missing = Object.keys(fiber.inject).filter(service => fiber.ctx.get(service) === undefined)
       const subject = missing.length === 1 ? 'service' : 'services'
-      failures.push(`${entry.options.name}: pending (waiting for ${subject}: ${missing.join(', ') || 'unknown'})`)
+      record(`${name}: pending (waiting for ${subject}: ${missing.join(', ') || 'unknown'})`)
     } else {
-      failures.push(`${entry.options.name}: fiber state ${String(state)}`)
+      record(`${name}: fiber state ${String(state)}`)
     }
   }
-  if (failures.length > 0) {
+  if (coreFailures.length > 0) {
     if (rejectionReasons.length > 0) {
       await observeLoaderRejectionCheckpoint(rejectionReasons)
     }
-    const noun = failures.length === 1 ? 'entry' : 'entries'
-    throw new Error(`${binName}: ${String(failures.length)} ${noun} did not activate\n${failures.join('\n')}`)
+    const noun = coreFailures.length === 1 ? 'entry' : 'entries'
+    throw new Error(`${binName}: ${String(coreFailures.length)} ${noun} did not activate\n${coreFailures.join('\n')}`)
   }
 }
 
@@ -793,6 +812,7 @@ export async function boot(
   patches?: PatchOptions[],
   prepare?: (ctx: Context) => Promise<void> | void,
   bareModuleBaseUrl?: string,
+  options: { onQuarantine?: (message: string) => void } = {},
 ): Promise<Context> {
   const ctx = new Context()
   // Two failure labels: `prepare` runs before any config-tree entry mounts,
@@ -814,7 +834,7 @@ export async function boot(
     // re-check after every await.
     await ctx.get('loader')?.await()
     if (ctx.get('loader') === undefined) return ctx
-    await assertEntriesActivated(ctx, binName)
+    await assertEntriesActivated(ctx, binName, options)
     return ctx
   } catch (cause) {
     // Root-fiber disposal contains cleanup failures per observer (Cordis
@@ -858,7 +878,7 @@ export function addHarnessSourceSection(ctx: Context, sourceRoot: string): (() =
   if (systemPrompt === undefined) return undefined
   return systemPrompt.section({
     name: HARNESS_SOURCE_SECTION,
-    order: systemPrompt.getSectionOrder('HARNESS_SOURCE'),
+    order: FIRST_PARTY_SECTION_ORDER.HARNESS_SOURCE,
     text: `The DeepSeek Harness implementation checkout is at ${sourceRoot}. The checkout location and current working directory are separate values and may differ; never infer the working directory from this path. Use pwd to determine the current working directory. Use this checkout only to inspect or extend DSH itself.`,
   })
 }

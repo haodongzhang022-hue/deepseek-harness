@@ -115,6 +115,7 @@ export const STAGING_8027_STATUS_MAP: StatusMap = {
 
 /** Production promotion gate (8028): observation only; terminal rows stay unlisted by default. */
 export const PRODUCTION_8028_STATUS_MAP: StatusMap = {
+  rejected: [],
   approved: ['production_approved'],
 }
 

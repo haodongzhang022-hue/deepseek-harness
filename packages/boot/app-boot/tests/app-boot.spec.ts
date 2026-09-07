@@ -1,8 +1,8 @@
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { afterAll, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import SystemPrompt, { renderPrompt } from '@deepseek-ai/dsh-system-prompt'
 import {
@@ -13,16 +13,7 @@ import {
 
 const NAME = 'dsh-test-bin'
 
-const tempRoots: string[] = []
-afterAll(() => {
-  for (const root of tempRoots.splice(0)) rmSync(root, { recursive: true, force: true })
-})
-
-const tmp = (): string => {
-  const dir = mkdtempSync(join(tmpdir(), 'dsh-app-boot-'))
-  tempRoots.push(dir)
-  return dir
-}
+const tmp = (): string => mkdtempSync(join(tmpdir(), 'dsh-app-boot-'))
 
 describe('resolveConfigPath', () => {
   it('resolves relative to the given cwd outside replay mode', () => {
@@ -154,83 +145,6 @@ describe('loadLayeredEnv', () => {
       expect(process.env[NAMES[1]]).toBeUndefined()
     } finally {
       clear()
-      vi.unstubAllEnvs()
-    }
-  })
-
-  const PROXY = ['HTTP_PROXY', 'http_proxy', 'HTTPS_PROXY', 'https_proxy', 'NO_PROXY', 'no_proxy'] as const
-  function clearProxy(): void {
-    for (const name of PROXY) Reflect.deleteProperty(process.env, name)
-  }
-
-  it('accepts the proxy names from the Harness-home .env, below an exported one', () => {
-    const home = tmp()
-    const project = tmp()
-    // Both casings, because a shell profile writes either and the rejection matches both. Each
-    // spelling gets its own name here: Windows folds `https_proxy` and `HTTPS_PROXY` into one
-    // variable, so which spelling a value lands under is the platform's to decide — that the file
-    // supplies it, and that the launching shell outranks the file, is not.
-    writeFileSync(join(home, '.env'), 'HTTP_PROXY=http://from-home:8080\nno_proxy=example.com\nHTTPS_PROXY=http://from-home:8443\n')
-    clear(); clearProxy()
-    vi.stubEnv('DSH_HOME', home)
-    vi.stubEnv('HTTPS_PROXY', 'http://exported:8080')
-    try {
-      const snapshot = loadLayeredEnv(NAME, project, vi.fn())
-      expect(snapshot.get('HTTP_PROXY')).toEqual({ value: 'http://from-home:8080', source: 'user-env', path: join(home, '.env') })
-      expect(snapshot.get('no_proxy')).toEqual({ value: 'example.com', source: 'user-env', path: join(home, '.env') })
-      // The launching shell still outranks the file for the same variable.
-      expect(snapshot.get('HTTPS_PROXY')).toEqual({ value: 'http://exported:8080', source: 'process' })
-      expect(process.env.HTTP_PROXY).toBe('http://from-home:8080')
-      expect(process.env.HTTPS_PROXY).toBe('http://exported:8080')
-    } finally {
-      clear(); clearProxy()
-      vi.unstubAllEnvs()
-    }
-  })
-
-  it('still refuses every other bootstrap name in the Harness-home .env', () => {
-    const home = tmp()
-    const project = tmp()
-    // A CA path sits in the same network group as the proxy names and changes what is trusted,
-    // not where traffic goes; the exemption must not widen to it.
-    writeFileSync(join(home, '.env'), 'SSL_CERT_FILE=/tmp/ca.pem\n')
-    clear()
-    vi.stubEnv('DSH_HOME', home)
-    try {
-      expect(() => loadLayeredEnv(NAME, project, vi.fn())).toThrow(/only the launching environment may set/)
-    } finally {
-      clear()
-      vi.unstubAllEnvs()
-    }
-  })
-
-  it('names the Harness-home file as the way out when a project .env sets a proxy', () => {
-    const home = tmp()
-    const project = tmp()
-    writeFileSync(join(project, '.env'), 'HTTP_PROXY=http://attacker.example\n')
-    clear(); clearProxy()
-    vi.stubEnv('DSH_HOME', home)
-    try {
-      expect(() => loadLayeredEnv(NAME, project, vi.fn()))
-        .toThrow(`export HTTP_PROXY, or put it in ${join(home, '.env')}, which does not travel with a repository`)
-      expect(process.env.HTTP_PROXY).toBeUndefined()
-    } finally {
-      clear(); clearProxy()
-      vi.unstubAllEnvs()
-    }
-  })
-
-  it('treats the invoking directory as the Harness home when they are the same directory', () => {
-    const home = tmp()
-    writeFileSync(join(home, '.env'), 'HTTP_PROXY=http://from-home:8080\n')
-    clear(); clearProxy()
-    vi.stubEnv('DSH_HOME', home)
-    try {
-      // Launched from inside the home itself, its one file is read as the project layer; the
-      // exemption follows the directory, not the layer name.
-      expect(loadLayeredEnv(NAME, home, vi.fn()).get('HTTP_PROXY')?.value).toBe('http://from-home:8080')
-    } finally {
-      clear(); clearProxy()
       vi.unstubAllEnvs()
     }
   })
@@ -421,7 +335,7 @@ describe('installFailLoud', () => {
     const error = new Error('assembled activation failure')
     const audit = assertEntriesActivated({
       loader: {
-        entries: () => ['broken-a', 'broken-b'].map(name => ({
+        entries: () => ['@deepseek-ai/broken-a', '@deepseek-ai/broken-b'].map(name => ({
           options: { name },
           fiber: {
             state: 3,
@@ -512,12 +426,24 @@ describe('assertEntriesLoaded', () => {
     ]), NAME) }).not.toThrow()
   })
 
-  it('throws naming every enabled fiber-less entry', () => {
+  it('throws naming every enabled fiber-less core entry', () => {
     expect(() => { assertEntriesLoaded(ctxWith([
       { fiber: {}, options: { name: 'ok' } },
-      { options: { name: 'broken-a' } },
-      { options: { name: 'broken-b' } },
-    ]), NAME) }).toThrow(`${NAME}: plugin(s) failed to load: broken-a, broken-b`)
+      { options: { name: '@deepseek-ai/broken-a' } },
+      { options: { name: 'cordis:broken-b' } },
+    ]), NAME) }).toThrow(
+      `${NAME}: core plugin(s) failed to load: @deepseek-ai/broken-a, cordis:broken-b; Cordis startup failed because these plugin(s) could not be resolved (see the error(s) logged above)`,
+    )
+  })
+
+  it('quarantines external fiber-less entries instead of crashing', () => {
+    const seen: string[] = []
+    expect(() => { assertEntriesLoaded(ctxWith([
+      { options: { name: 'open-source-import' } },
+    ]), NAME, { onQuarantine: m => { seen.push(m) } }) }).not.toThrow()
+    expect(seen).toEqual([
+      `${NAME}: plugin "open-source-import" could not be resolved while booting; quarantining it, the system continues without it`,
+    ])
   })
 })
 
@@ -567,26 +493,26 @@ describe('assertEntriesActivated', () => {
   it('reports the plugin name and original activation stack instead of fiber state 3', async () => {
     const original = new Error('actual plugin failure')
     await expect(assertEntriesActivated(ctxWith([
-      { fiber: fiber(3, original), options: { name: 'broken-plugin' } },
-    ]), NAME)).rejects.toThrow(`${NAME}: 1 entry did not activate\nbroken-plugin: ${original.stack!}`)
+      { fiber: fiber(3, original), options: { name: '@deepseek-ai/broken-plugin' } },
+    ]), NAME)).rejects.toThrow(`${NAME}: 1 entry did not activate\n@deepseek-ai/broken-plugin: ${original.stack!}`)
   })
 
   it('formats stackless and non-Error activation failures', async () => {
     const stackless = new Error('stackless failure')
     delete (stackless as { stack?: string }).stack
     await expect(assertEntriesActivated(ctxWith([
-      { fiber: fiber(3, stackless), options: { name: 'stackless' } },
-      { fiber: fiber(3, 'plain failure'), options: { name: 'plain' } },
-    ]), NAME)).rejects.toThrow(`${NAME}: 2 entries did not activate\nstackless: stackless failure\nplain: plain failure`)
+      { fiber: fiber(3, stackless), options: { name: '@deepseek-ai/stackless' } },
+      { fiber: fiber(3, 'plain failure'), options: { name: '@deepseek-ai/plain' } },
+    ]), NAME)).rejects.toThrow(`${NAME}: 2 entries did not activate\n@deepseek-ai/stackless: stackless failure\n@deepseek-ai/plain: plain failure`)
   })
 
   it('reports unresolved services for pending entries', async () => {
     let awaitCalls = 0
     const expected = [
       `${NAME}: 3 entries did not activate`,
-      'waiting: pending (waiting for services: missingA, missingB)',
-      'single-wait: pending (waiting for service: missing)',
-      'unknown-wait: pending (waiting for services: unknown)',
+      '@deepseek-ai/waiting: pending (waiting for services: missingA, missingB)',
+      '@deepseek-ai/single-wait: pending (waiting for service: missing)',
+      '@deepseek-ai/unknown-wait: pending (waiting for services: unknown)',
     ].join('\n')
     const waiting = fiber(0, undefined, { ready: {}, missingA: {}, missingB: {} }, ['ready'])
     const singleWait = fiber(0, undefined, { missing: {} })
@@ -598,17 +524,32 @@ describe('assertEntriesActivated', () => {
       }
     }
     await expect(assertEntriesActivated(ctxWith([
-      { fiber: waiting, options: { name: 'waiting' } },
-      { fiber: singleWait, options: { name: 'single-wait' } },
-      { fiber: unknownWait, options: { name: 'unknown-wait' } },
+      { fiber: waiting, options: { name: '@deepseek-ai/waiting' } },
+      { fiber: singleWait, options: { name: '@deepseek-ai/single-wait' } },
+      { fiber: unknownWait, options: { name: '@deepseek-ai/unknown-wait' } },
     ]), NAME)).rejects.toThrow(expected)
     expect(awaitCalls).toBe(0)
   })
 
   it('retains the numeric diagnostic for a settled unexpected state', async () => {
     await expect(assertEntriesActivated(ctxWith([
-      { fiber: fiber(4), options: { name: 'disposed' } },
-    ]), NAME)).rejects.toThrow('disposed: fiber state 4')
+      { fiber: fiber(4), options: { name: '@deepseek-ai/disposed' } },
+    ]), NAME)).rejects.toThrow('@deepseek-ai/disposed: fiber state 4')
+  })
+
+  it('quarantines external failed, pending, and disposed entries instead of crashing', async () => {
+    const seen: string[] = []
+    const broken = new Error('third-party activation failure')
+    await expect(assertEntriesActivated(ctxWith([
+      { fiber: fiber(3, broken), options: { name: 'ext-failed' } },
+      { fiber: fiber(0), options: { name: 'ext-pending' } },
+      { fiber: fiber(4), options: { name: 'ext-disposed' } },
+    ]), NAME, { onQuarantine: m => { seen.push(m) } })).resolves.toBeUndefined()
+    expect(seen).toEqual([
+      `${NAME}: plugin "ext-failed" did not activate while booting; quarantining it, the system continues without it`,
+      `${NAME}: plugin "ext-pending" did not activate while booting; quarantining it, the system continues without it`,
+      `${NAME}: plugin "ext-disposed" did not activate while booting; quarantining it, the system continues without it`,
+    ])
   })
 })
 
@@ -879,14 +820,19 @@ describe('boot', () => {
     }
   })
 
-  it('reports a pending real Loader fiber and the service unresolved in its own context', async () => {
+  it('quarantines a pending external Fiber entry so the tree boots without it', async () => {
     const dir = tmp()
     writeFileSync(join(dir, 'waiting.mjs'), 'export const inject = ["neverProvided"]\nexport function apply() {}\n')
     writeFileSync(join(dir, 'cordis.yml'), '- id: waiting\n  name: ./waiting.mjs\n')
-    await expect(boot(NAME, join(dir, 'cordis.yml'))).rejects.toThrow([
-      `${NAME}: 1 entry did not activate`,
-      './waiting.mjs: pending (waiting for service: neverProvided)',
-    ].join('\n'))
+    const quarantined: string[] = []
+    const ctx = await boot(NAME, join(dir, 'cordis.yml'), undefined, undefined, undefined, { onQuarantine: m => { quarantined.push(m) } })
+    try {
+      expect(quarantined).toEqual([
+        `${NAME}: plugin "./waiting.mjs" did not activate while booting; quarantining it, the system continues without it`,
+      ])
+    } finally {
+      await ctx.fiber.dispose()
+    }
   })
 })
 

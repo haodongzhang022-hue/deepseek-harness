@@ -131,11 +131,12 @@ export function analyzeError(error: TaskError): ErrorAnalysis {
     p.pattern.test(error.message) || p.pattern.test(error.code),
   )
 
+  const rootCause = inferRootCause(matchedPatterns, error)
   return {
     error,
     patterns: matchedPatterns,
     severity: determineSeverity(matchedPatterns, error),
-    rootCause: inferRootCause(matchedPatterns, error),
+    ...(rootCause === undefined ? {} : { rootCause }),
     suggestions: [
       ...matchedPatterns.map(p => p.suggestion),
       ...(error.suggestion !== undefined ? [error.suggestion] : []),

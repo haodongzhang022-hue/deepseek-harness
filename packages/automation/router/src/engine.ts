@@ -12,7 +12,7 @@
  */
 
 import { diffGateSnapshots } from '@deepseek-ai/dsh-automation-gate'
-import type { GateEvent, GateItem, PipelineGateAdapter, WakeTargetResolver } from '@deepseek-ai/dsh-automation-gate'
+import type { GateEvent, GateItem, GateItemState, PipelineGateAdapter, WakeTargetResolver } from '@deepseek-ai/dsh-automation-gate'
 import type { FileLedger } from './ledger.ts'
 import type { WakeTransport } from './wake-transport.ts'
 
